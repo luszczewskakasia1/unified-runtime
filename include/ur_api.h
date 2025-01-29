@@ -375,16 +375,10 @@ typedef enum ur_function_t {
   UR_FUNCTION_PROGRAM_GET_GLOBAL_VARIABLE_POINTER = 216,
   /// Enumerator for ::urDeviceGetSelected
   UR_FUNCTION_DEVICE_GET_SELECTED = 217,
-  /// Enumerator for ::urCommandBufferRetainCommandExp
-  UR_FUNCTION_COMMAND_BUFFER_RETAIN_COMMAND_EXP = 218,
-  /// Enumerator for ::urCommandBufferReleaseCommandExp
-  UR_FUNCTION_COMMAND_BUFFER_RELEASE_COMMAND_EXP = 219,
   /// Enumerator for ::urCommandBufferUpdateKernelLaunchExp
   UR_FUNCTION_COMMAND_BUFFER_UPDATE_KERNEL_LAUNCH_EXP = 220,
   /// Enumerator for ::urCommandBufferGetInfoExp
   UR_FUNCTION_COMMAND_BUFFER_GET_INFO_EXP = 221,
-  /// Enumerator for ::urCommandBufferCommandGetInfoExp
-  UR_FUNCTION_COMMAND_BUFFER_COMMAND_GET_INFO_EXP = 222,
   /// Enumerator for ::urEnqueueTimestampRecordingExp
   UR_FUNCTION_ENQUEUE_TIMESTAMP_RECORDING_EXP = 223,
   /// Enumerator for ::urEnqueueKernelLaunchCustomExp
@@ -433,10 +427,6 @@ typedef enum ur_function_t {
   UR_FUNCTION_BINDLESS_IMAGES_MAP_EXTERNAL_LINEAR_MEMORY_EXP = 245,
   /// Enumerator for ::urEnqueueEventsWaitWithBarrierExt
   UR_FUNCTION_ENQUEUE_EVENTS_WAIT_WITH_BARRIER_EXT = 246,
-  /// Enumerator for ::urTensorMapEncodeIm2ColExp
-  UR_FUNCTION_TENSOR_MAP_ENCODE_IM_2_COL_EXP = 247,
-  /// Enumerator for ::urTensorMapEncodeTiledExp
-  UR_FUNCTION_TENSOR_MAP_ENCODE_TILED_EXP = 248,
   /// Enumerator for ::urPhysicalMemGetInfo
   UR_FUNCTION_PHYSICAL_MEM_GET_INFO = 249,
   /// @cond
@@ -1615,9 +1605,9 @@ typedef struct ur_platform_native_properties_t {
   ur_structure_type_t stype;
   /// [in,out][optional] pointer to extension-specific structure
   void *pNext;
-  /// [in] Indicates UR owns the native handle or if it came from an
-  /// interoperability operation in the application that asked to not
-  /// transfer the ownership to the unified-runtime.
+  /// [in] If true then ownership of the native handle is transferred to
+  /// the resultant object. This means the object will be responsible for
+  /// releasing the native resources at the end of its lifetime.
   bool isNativeHandleOwned;
 
 } ur_platform_native_properties_t;
@@ -2198,6 +2188,11 @@ typedef enum ur_device_info_t {
   /// to the `USMPool` entry points and usage of the `pool` parameter of the
   /// USM alloc entry points.
   UR_DEVICE_INFO_USM_POOL_SUPPORT = 119,
+  /// [uint32_t] the number of compute units for specific backend.
+  UR_DEVICE_INFO_NUM_COMPUTE_UNITS = 120,
+  /// [::ur_bool_t] support the ::urProgramSetSpecializationConstants entry
+  /// point
+  UR_DEVICE_INFO_PROGRAM_SET_SPECIALIZATION_CONSTANTS = 121,
   /// [::ur_bool_t] Returns true if the device supports the use of
   /// command-buffers.
   UR_DEVICE_INFO_COMMAND_BUFFER_SUPPORT_EXP = 0x1000,
@@ -2696,9 +2691,9 @@ typedef struct ur_device_native_properties_t {
   ur_structure_type_t stype;
   /// [in,out][optional] pointer to extension-specific structure
   void *pNext;
-  /// [in] Indicates UR owns the native handle or if it came from an
-  /// interoperability operation in the application that asked to not
-  /// transfer the ownership to the unified-runtime.
+  /// [in] If true then ownership of the native handle is transferred to
+  /// the resultant object. This means the object will be responsible for
+  /// releasing the native resources at the end of its lifetime.
   bool isNativeHandleOwned;
 
 } ur_device_native_properties_t;
@@ -3076,9 +3071,9 @@ typedef struct ur_context_native_properties_t {
   ur_structure_type_t stype;
   /// [in,out][optional] pointer to extension-specific structure
   void *pNext;
-  /// [in] Indicates UR owns the native handle or if it came from an
-  /// interoperability operation in the application that asked to not transfer
-  /// the ownership to the unified-runtime.
+  /// [in] If true then ownership of the native handle is transferred to
+  /// the resultant object. This means the object will be responsible for
+  /// releasing the native resources at the end of its lifetime.
   bool isNativeHandleOwned;
 
 } ur_context_native_properties_t;
@@ -3697,9 +3692,9 @@ typedef struct ur_mem_native_properties_t {
   ur_structure_type_t stype;
   /// [in,out][optional] pointer to extension-specific structure
   void *pNext;
-  /// [in] Indicates UR owns the native handle or if it came from an
-  /// interoperability operation in the application that asked to not
-  /// transfer the ownership to the unified-runtime.
+  /// [in] If true then ownership of the native handle is transferred to
+  /// the resultant object. This means the object will be responsible for
+  /// releasing the native resources at the end of its lifetime.
   bool isNativeHandleOwned;
 
 } ur_mem_native_properties_t;
@@ -4103,9 +4098,9 @@ typedef struct ur_sampler_native_properties_t {
   ur_structure_type_t stype;
   /// [in,out][optional] pointer to extension-specific structure
   void *pNext;
-  /// [in] Indicates UR owns the native handle or if it came from an
-  /// interoperability operation in the application that asked to not
-  /// transfer the ownership to the unified-runtime.
+  /// [in] If true then ownership of the native handle is transferred to
+  /// the resultant object. This means the object will be responsible for
+  /// releasing the native resources at the end of its lifetime.
   bool isNativeHandleOwned;
 
 } ur_sampler_native_properties_t;
@@ -5739,6 +5734,10 @@ typedef struct ur_specialization_constant_info_t {
 /// @brief Set an array of specialization constants on a Program.
 ///
 /// @details
+///     - This entry point is optional, the application should query for support
+///       with device query
+///       ::UR_DEVICE_INFO_PROGRAM_SET_SPECIALIZATION_CONSTANTS passed to
+///       ::urDeviceGetInfo.
 ///     - The application may call this function from simultaneous threads for
 ///       the same device.
 ///     - The implementation of this function should be thread-safe.
@@ -5758,6 +5757,9 @@ typedef struct ur_specialization_constant_info_t {
 ///         + `NULL == pSpecConstants`
 ///     - ::UR_RESULT_ERROR_INVALID_SIZE
 ///         + `count == 0`
+///     - ::UR_RESULT_ERROR_UNSUPPORTED_FEATURE
+///         + If ::UR_DEVICE_INFO_PROGRAM_SET_SPECIALIZATION_CONSTANTS query is
+///         false
 ///     - ::UR_RESULT_ERROR_INVALID_VALUE
 ///         + A pSpecConstant entry contains a size that does not match that of
 ///         the specialization constant in the module.
@@ -5811,9 +5813,9 @@ typedef struct ur_program_native_properties_t {
   ur_structure_type_t stype;
   /// [in,out][optional] pointer to extension-specific structure
   void *pNext;
-  /// [in] Indicates UR owns the native handle or if it came from an
-  /// interoperability operation in the application that asked to not
-  /// transfer the ownership to the unified-runtime.
+  /// [in] If true then ownership of the native handle is transferred to
+  /// the resultant object. This means the object will be responsible for
+  /// releasing the native resources at the end of its lifetime.
   bool isNativeHandleOwned;
 
 } ur_program_native_properties_t;
@@ -6480,9 +6482,9 @@ typedef struct ur_kernel_native_properties_t {
   ur_structure_type_t stype;
   /// [in,out][optional] pointer to extension-specific structure
   void *pNext;
-  /// [in] Indicates UR owns the native handle or if it came from an
-  /// interoperability operation in the application that asked to not transfer
-  /// the ownership to the unified-runtime.
+  /// [in] If true then ownership of the native handle is transferred to
+  /// the resultant object. This means the object will be responsible for
+  /// releasing the native resources at the end of its lifetime.
   bool isNativeHandleOwned;
 
 } ur_kernel_native_properties_t;
@@ -6875,9 +6877,9 @@ typedef struct ur_queue_native_properties_t {
   ur_structure_type_t stype;
   /// [in,out][optional] pointer to extension-specific structure
   void *pNext;
-  /// [in] Indicates UR owns the native handle or if it came from an
-  /// interoperability operation in the application that asked to not transfer
-  /// the ownership to the unified-runtime.
+  /// [in] If true then ownership of the native handle is transferred to
+  /// the resultant object. This means the object will be responsible for
+  /// releasing the native resources at the end of its lifetime.
   bool isNativeHandleOwned;
 
 } ur_queue_native_properties_t;
@@ -7301,9 +7303,9 @@ typedef struct ur_event_native_properties_t {
   ur_structure_type_t stype;
   /// [in,out][optional] pointer to extension-specific structure
   void *pNext;
-  /// [in] Indicates UR owns the native handle or if it came from an
-  /// interoperability operation in the application that asked to not transfer
-  /// the ownership to the unified-runtime.
+  /// [in] If true then ownership of the native handle is transferred to
+  /// the resultant object. This means the object will be responsible for
+  /// releasing the native resources at the end of its lifetime.
   bool isNativeHandleOwned;
 
 } ur_event_native_properties_t;
@@ -11014,41 +11016,6 @@ UR_APIEXPORT ur_result_t UR_APICALL urCommandBufferEnqueueExp(
     ur_event_handle_t *phEvent);
 
 ///////////////////////////////////////////////////////////////////////////////
-/// @brief Increment the command object's reference count.
-///
-/// @returns
-///     - ::UR_RESULT_SUCCESS
-///     - ::UR_RESULT_ERROR_UNINITIALIZED
-///     - ::UR_RESULT_ERROR_DEVICE_LOST
-///     - ::UR_RESULT_ERROR_ADAPTER_SPECIFIC
-///     - ::UR_RESULT_ERROR_INVALID_NULL_HANDLE
-///         + `NULL == hCommand`
-///     - ::UR_RESULT_ERROR_INVALID_COMMAND_BUFFER_COMMAND_HANDLE_EXP
-///     - ::UR_RESULT_ERROR_OUT_OF_RESOURCES
-///     - ::UR_RESULT_ERROR_OUT_OF_HOST_MEMORY
-UR_APIEXPORT ur_result_t UR_APICALL urCommandBufferRetainCommandExp(
-    /// [in][retain] Handle of the command-buffer command.
-    ur_exp_command_buffer_command_handle_t hCommand);
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Decrement the command object's reference count and delete the command
-///        object if the reference count becomes zero.
-///
-/// @returns
-///     - ::UR_RESULT_SUCCESS
-///     - ::UR_RESULT_ERROR_UNINITIALIZED
-///     - ::UR_RESULT_ERROR_DEVICE_LOST
-///     - ::UR_RESULT_ERROR_ADAPTER_SPECIFIC
-///     - ::UR_RESULT_ERROR_INVALID_NULL_HANDLE
-///         + `NULL == hCommand`
-///     - ::UR_RESULT_ERROR_INVALID_COMMAND_BUFFER_COMMAND_HANDLE_EXP
-///     - ::UR_RESULT_ERROR_OUT_OF_RESOURCES
-///     - ::UR_RESULT_ERROR_OUT_OF_HOST_MEMORY
-UR_APIEXPORT ur_result_t UR_APICALL urCommandBufferReleaseCommandExp(
-    /// [in][release] Handle of the command-buffer command.
-    ur_exp_command_buffer_command_handle_t hCommand);
-
-///////////////////////////////////////////////////////////////////////////////
 /// @brief Update a kernel launch command in a finalized command-buffer.
 ///
 /// @details
@@ -11093,7 +11060,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urCommandBufferReleaseCommandExp(
 ///         is not nullptr.
 ///     - ::UR_RESULT_ERROR_INVALID_OPERATION
 ///         + If ::ur_exp_command_buffer_desc_t::isUpdatable was not set to true
-///         on creation of the command buffer `hCommand` belongs to.
+///         on creation of the command-buffer `hCommand` belongs to.
 ///         + If the command-buffer `hCommand` belongs to has not been
 ///         finalized.
 ///     - ::UR_RESULT_ERROR_INVALID_COMMAND_BUFFER_COMMAND_HANDLE_EXP
@@ -11146,7 +11113,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urCommandBufferUpdateKernelLaunchExp(
 ///         supported by the device associated with `hCommand`.
 ///     - ::UR_RESULT_ERROR_INVALID_OPERATION
 ///         + If ::ur_exp_command_buffer_desc_t::isUpdatable was not set to true
-///         on creation of the command buffer `hCommand` belongs to.
+///         on creation of the command-buffer `hCommand` belongs to.
 ///         + If the command-buffer `hCommand` belongs to has not been
 ///         finalized.
 ///         + If no `phEvent` parameter was set on creation of the command
@@ -11177,7 +11144,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urCommandBufferUpdateSignalEventExp(
 ///         supported by the device associated with `hCommand`.
 ///     - ::UR_RESULT_ERROR_INVALID_OPERATION
 ///         + If ::ur_exp_command_buffer_desc_t::isUpdatable was not set to true
-///         on creation of the command buffer `hCommand` belongs to.
+///         on creation of the command-buffer `hCommand` belongs to.
 ///         + If the command-buffer `hCommand` belongs to has not been
 ///         finalized.
 ///     - ::UR_RESULT_ERROR_INVALID_COMMAND_BUFFER_COMMAND_HANDLE_EXP
@@ -11234,43 +11201,6 @@ UR_APIEXPORT ur_result_t UR_APICALL urCommandBufferGetInfoExp(
     /// command-buffer property
     void *pPropValue,
     /// [out][optional] bytes returned in command-buffer property
-    size_t *pPropSizeRet);
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Get command-buffer object information.
-///
-/// @returns
-///     - ::UR_RESULT_SUCCESS
-///     - ::UR_RESULT_ERROR_UNINITIALIZED
-///     - ::UR_RESULT_ERROR_DEVICE_LOST
-///     - ::UR_RESULT_ERROR_ADAPTER_SPECIFIC
-///     - ::UR_RESULT_ERROR_INVALID_NULL_HANDLE
-///         + `NULL == hCommand`
-///     - ::UR_RESULT_ERROR_INVALID_ENUMERATION
-///         + `::UR_EXP_COMMAND_BUFFER_COMMAND_INFO_REFERENCE_COUNT < propName`
-///     - ::UR_RESULT_ERROR_UNSUPPORTED_ENUMERATION
-///         + If `propName` is not supported by the adapter.
-///     - ::UR_RESULT_ERROR_INVALID_SIZE
-///         + `propSize == 0 && pPropValue != NULL`
-///         + If `propSize` is less than the real number of bytes needed to
-///         return the info.
-///     - ::UR_RESULT_ERROR_INVALID_NULL_POINTER
-///         + `propSize != 0 && pPropValue == NULL`
-///         + `pPropValue == NULL && pPropSizeRet == NULL`
-///     - ::UR_RESULT_ERROR_INVALID_COMMAND_BUFFER_COMMAND_HANDLE_EXP
-///     - ::UR_RESULT_ERROR_OUT_OF_RESOURCES
-///     - ::UR_RESULT_ERROR_OUT_OF_HOST_MEMORY
-UR_APIEXPORT ur_result_t UR_APICALL urCommandBufferCommandGetInfoExp(
-    /// [in] handle of the command-buffer command object
-    ur_exp_command_buffer_command_handle_t hCommand,
-    /// [in] the name of the command-buffer command property to query
-    ur_exp_command_buffer_command_info_t propName,
-    /// [in] size in bytes of the command-buffer command property value
-    size_t propSize,
-    /// [out][optional][typename(propName, propSize)] value of the
-    /// command-buffer command property
-    void *pPropValue,
-    /// [out][optional] bytes returned in command-buffer command property
     size_t *pPropSizeRet);
 
 #if !defined(__GNUC__)
@@ -12120,258 +12050,6 @@ UR_APIEXPORT ur_result_t UR_APICALL urEnqueueNativeCommandExp(
     /// not NULL, phEvent must not refer to an element of the phEventWaitList
     /// array.
     ur_event_handle_t *phEvent);
-
-#if !defined(__GNUC__)
-#pragma endregion
-#endif
-// Intel 'oneAPI' Unified Runtime Experimental API for mapping tensor objects
-#if !defined(__GNUC__)
-#pragma region tensor_map_(experimental)
-#endif
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Handle of tensor map object
-typedef struct ur_exp_tensor_map_handle_t_ *ur_exp_tensor_map_handle_t;
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Tensor map data type
-typedef uint32_t ur_exp_tensor_map_data_type_flags_t;
-typedef enum ur_exp_tensor_map_data_type_flag_t {
-  /// 1 byte
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_UINT8 = UR_BIT(0),
-  /// 2 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_UINT16 = UR_BIT(1),
-  /// 4 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_UINT32 = UR_BIT(2),
-  /// 4 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_INT32 = UR_BIT(3),
-  /// 8 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_UINT64 = UR_BIT(4),
-  /// 8 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_INT64 = UR_BIT(5),
-  /// 2 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_FLOAT16 = UR_BIT(6),
-  /// 4 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_FLOAT32 = UR_BIT(7),
-  /// 8 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_FLOAT64 = UR_BIT(8),
-  /// 2 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_BFLOAT16 = UR_BIT(9),
-  /// 4 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_FLOAT32_FTZ = UR_BIT(10),
-  /// 4 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_TFLOAT32 = UR_BIT(11),
-  /// 4 bytes
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_TFLOAT32_FTZ = UR_BIT(12),
-  /// @cond
-  UR_EXP_TENSOR_MAP_DATA_TYPE_FLAG_FORCE_UINT32 = 0x7fffffff
-  /// @endcond
-
-} ur_exp_tensor_map_data_type_flag_t;
-/// @brief Bit Mask for validating ur_exp_tensor_map_data_type_flags_t
-#define UR_EXP_TENSOR_MAP_DATA_TYPE_FLAGS_MASK 0xffffe000
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Tensor map interleave
-typedef uint32_t ur_exp_tensor_map_interleave_flags_t;
-typedef enum ur_exp_tensor_map_interleave_flag_t {
-  /// No interleave
-  UR_EXP_TENSOR_MAP_INTERLEAVE_FLAG_NONE = UR_BIT(0),
-  /// 16B interleave
-  UR_EXP_TENSOR_MAP_INTERLEAVE_FLAG_16B = UR_BIT(1),
-  /// 32B interleave
-  UR_EXP_TENSOR_MAP_INTERLEAVE_FLAG_32B = UR_BIT(2),
-  /// @cond
-  UR_EXP_TENSOR_MAP_INTERLEAVE_FLAG_FORCE_UINT32 = 0x7fffffff
-  /// @endcond
-
-} ur_exp_tensor_map_interleave_flag_t;
-/// @brief Bit Mask for validating ur_exp_tensor_map_interleave_flags_t
-#define UR_EXP_TENSOR_MAP_INTERLEAVE_FLAGS_MASK 0xfffffff8
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Tensor map l2 promotion
-typedef uint32_t ur_exp_tensor_map_l2_promotion_flags_t;
-typedef enum ur_exp_tensor_map_l2_promotion_flag_t {
-  /// No promotion type
-  UR_EXP_TENSOR_MAP_L2_PROMOTION_FLAG_NONE = UR_BIT(0),
-  /// 64B promotion type
-  UR_EXP_TENSOR_MAP_L2_PROMOTION_FLAG_64B = UR_BIT(1),
-  /// 128B promotion type
-  UR_EXP_TENSOR_MAP_L2_PROMOTION_FLAG_128B = UR_BIT(2),
-  /// 256B promotion type
-  UR_EXP_TENSOR_MAP_L2_PROMOTION_FLAG_256B = UR_BIT(3),
-  /// @cond
-  UR_EXP_TENSOR_MAP_L2_PROMOTION_FLAG_FORCE_UINT32 = 0x7fffffff
-  /// @endcond
-
-} ur_exp_tensor_map_l2_promotion_flag_t;
-/// @brief Bit Mask for validating ur_exp_tensor_map_l2_promotion_flags_t
-#define UR_EXP_TENSOR_MAP_L2_PROMOTION_FLAGS_MASK 0xfffffff0
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Tensor map swizzle
-typedef uint32_t ur_exp_tensor_map_swizzle_flags_t;
-typedef enum ur_exp_tensor_map_swizzle_flag_t {
-  /// No swizzle
-  UR_EXP_TENSOR_MAP_SWIZZLE_FLAG_NONE = UR_BIT(0),
-  /// 32B swizzle
-  UR_EXP_TENSOR_MAP_SWIZZLE_FLAG_32B = UR_BIT(1),
-  /// 64B swizzle
-  UR_EXP_TENSOR_MAP_SWIZZLE_FLAG_64B = UR_BIT(2),
-  /// 128B swizzle
-  UR_EXP_TENSOR_MAP_SWIZZLE_FLAG_128B = UR_BIT(3),
-  /// @cond
-  UR_EXP_TENSOR_MAP_SWIZZLE_FLAG_FORCE_UINT32 = 0x7fffffff
-  /// @endcond
-
-} ur_exp_tensor_map_swizzle_flag_t;
-/// @brief Bit Mask for validating ur_exp_tensor_map_swizzle_flags_t
-#define UR_EXP_TENSOR_MAP_SWIZZLE_FLAGS_MASK 0xfffffff0
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Tensor map OOB fill
-typedef uint32_t ur_exp_tensor_map_oob_fill_flags_t;
-typedef enum ur_exp_tensor_map_oob_fill_flag_t {
-  /// No OOB fill
-  UR_EXP_TENSOR_MAP_OOB_FILL_FLAG_NONE = UR_BIT(0),
-  /// Refer to NVIDIA docs
-  UR_EXP_TENSOR_MAP_OOB_FILL_FLAG_REQUEST_ZERO_FMA = UR_BIT(1),
-  /// @cond
-  UR_EXP_TENSOR_MAP_OOB_FILL_FLAG_FORCE_UINT32 = 0x7fffffff
-  /// @endcond
-
-} ur_exp_tensor_map_oob_fill_flag_t;
-/// @brief Bit Mask for validating ur_exp_tensor_map_oob_fill_flags_t
-#define UR_EXP_TENSOR_MAP_OOB_FILL_FLAGS_MASK 0xfffffffc
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Encode tensor map with image data
-///
-/// @details
-///     - Map encode using im2col.
-///
-/// @returns
-///     - ::UR_RESULT_SUCCESS
-///     - ::UR_RESULT_ERROR_UNINITIALIZED
-///     - ::UR_RESULT_ERROR_DEVICE_LOST
-///     - ::UR_RESULT_ERROR_ADAPTER_SPECIFIC
-///     - ::UR_RESULT_ERROR_INVALID_NULL_HANDLE
-///         + `NULL == hDevice`
-///     - ::UR_RESULT_ERROR_INVALID_ENUMERATION
-///         + `::UR_EXP_TENSOR_MAP_DATA_TYPE_FLAGS_MASK & TensorMapType`
-///         + `::UR_EXP_TENSOR_MAP_INTERLEAVE_FLAGS_MASK & Interleave`
-///         + `::UR_EXP_TENSOR_MAP_SWIZZLE_FLAGS_MASK & Swizzle`
-///         + `::UR_EXP_TENSOR_MAP_L2_PROMOTION_FLAGS_MASK & L2Promotion`
-///         + `::UR_EXP_TENSOR_MAP_OOB_FILL_FLAGS_MASK & OobFill`
-///     - ::UR_RESULT_ERROR_INVALID_NULL_POINTER
-///         + `NULL == GlobalAddress`
-///         + `NULL == GlobalDim`
-///         + `NULL == GlobalStrides`
-///         + `NULL == PixelBoxLowerCorner`
-///         + `NULL == PixelBoxUpperCorner`
-///         + `NULL == ElementStrides`
-///         + `NULL == hTensorMap`
-///     - ::UR_RESULT_ERROR_INVALID_ARGUMENT
-///         + `TensorRank < 3`
-UR_APIEXPORT ur_result_t UR_APICALL urTensorMapEncodeIm2ColExp(
-    /// [in] Handle of the device object.
-    ur_device_handle_t hDevice,
-    /// [in] Data type of the tensor object.
-    ur_exp_tensor_map_data_type_flags_t TensorMapType,
-    /// [in] Dimensionality of tensor; must be at least 3.
-    uint32_t TensorRank,
-    /// [in] Starting address of memory region described by tensor.
-    void *GlobalAddress,
-    /// [in] Array containing tensor size (number of elements) along each of
-    /// the TensorRank dimensions.
-    const uint64_t *GlobalDim,
-    /// [in] Array containing stride size (in bytes) along each of the
-    /// TensorRank - 1 dimensions.
-    const uint64_t *GlobalStrides,
-    /// [in] Array containing DHW dimensions of lower box corner.
-    const int *PixelBoxLowerCorner,
-    /// [in] Array containing DHW dimensions of upper box corner.
-    const int *PixelBoxUpperCorner,
-    /// [in] Number of channels per pixel.
-    uint32_t ChannelsPerPixel,
-    /// [in] Number of pixels per column.
-    uint32_t PixelsPerColumn,
-    /// [in] Array containing traversal stride in each of the TensorRank
-    /// dimensions.
-    const uint32_t *ElementStrides,
-    /// [in] Type of interleaved layout the tensor addresses
-    ur_exp_tensor_map_interleave_flags_t Interleave,
-    /// [in] Bank swizzling pattern inside shared memory
-    ur_exp_tensor_map_swizzle_flags_t Swizzle,
-    /// [in] L2 promotion size.
-    ur_exp_tensor_map_l2_promotion_flags_t L2Promotion,
-    /// [in] Indicates whether zero or special NaN constant will be used to
-    /// fill out-of-bounds elements.
-    ur_exp_tensor_map_oob_fill_flags_t OobFill,
-    /// [out] Handle of the tensor map object.
-    ur_exp_tensor_map_handle_t *hTensorMap);
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Encode tensor map with tiled data
-///
-/// @details
-///     - Tiled map encode.
-///
-/// @returns
-///     - ::UR_RESULT_SUCCESS
-///     - ::UR_RESULT_ERROR_UNINITIALIZED
-///     - ::UR_RESULT_ERROR_DEVICE_LOST
-///     - ::UR_RESULT_ERROR_ADAPTER_SPECIFIC
-///     - ::UR_RESULT_ERROR_INVALID_NULL_HANDLE
-///         + `NULL == hDevice`
-///     - ::UR_RESULT_ERROR_INVALID_ENUMERATION
-///         + `::UR_EXP_TENSOR_MAP_DATA_TYPE_FLAGS_MASK & TensorMapType`
-///         + `::UR_EXP_TENSOR_MAP_INTERLEAVE_FLAGS_MASK & Interleave`
-///         + `::UR_EXP_TENSOR_MAP_SWIZZLE_FLAGS_MASK & Swizzle`
-///         + `::UR_EXP_TENSOR_MAP_L2_PROMOTION_FLAGS_MASK & L2Promotion`
-///         + `::UR_EXP_TENSOR_MAP_OOB_FILL_FLAGS_MASK & OobFill`
-///     - ::UR_RESULT_ERROR_INVALID_NULL_POINTER
-///         + `NULL == GlobalAddress`
-///         + `NULL == GlobalDim`
-///         + `NULL == GlobalStrides`
-///         + `NULL == BoxDim`
-///         + `NULL == ElementStrides`
-///         + `NULL == hTensorMap`
-///     - ::UR_RESULT_ERROR_INVALID_ARGUMENT
-///         + `TensorRank < 3`
-UR_APIEXPORT ur_result_t UR_APICALL urTensorMapEncodeTiledExp(
-    /// [in] Handle of the device object.
-    ur_device_handle_t hDevice,
-    /// [in] Data type of the tensor object.
-    ur_exp_tensor_map_data_type_flags_t TensorMapType,
-    /// [in] Dimensionality of tensor; must be at least 3.
-    uint32_t TensorRank,
-    /// [in] Starting address of memory region described by tensor.
-    void *GlobalAddress,
-    /// [in] Array containing tensor size (number of elements) along each of
-    /// the TensorRank dimensions.
-    const uint64_t *GlobalDim,
-    /// [in] Array containing stride size (in bytes) along each of the
-    /// TensorRank - 1 dimensions.
-    const uint64_t *GlobalStrides,
-    /// [in] Array containing traversal box size (number of elments) along
-    /// each of the TensorRank dimensions. Specifies how many elements to be
-    /// traversed along each tensor dimension.
-    const uint32_t *BoxDim,
-    /// [in] Array containing traversal stride in each of the TensorRank
-    /// dimensions.
-    const uint32_t *ElementStrides,
-    /// [in] Type of interleaved layout the tensor addresses
-    ur_exp_tensor_map_interleave_flags_t Interleave,
-    /// [in] Bank swizzling pattern inside shared memory
-    ur_exp_tensor_map_swizzle_flags_t Swizzle,
-    /// [in] L2 promotion size.
-    ur_exp_tensor_map_l2_promotion_flags_t L2Promotion,
-    /// [in] Indicates whether zero or special NaN constant will be used to
-    /// fill out-of-bounds elements.
-    ur_exp_tensor_map_oob_fill_flags_t OobFill,
-    /// [out] Handle of the tensor map object.
-    ur_exp_tensor_map_handle_t *hTensorMap);
 
 #if !defined(__GNUC__)
 #pragma endregion
@@ -14494,22 +14172,6 @@ typedef struct ur_command_buffer_enqueue_exp_params_t {
 } ur_command_buffer_enqueue_exp_params_t;
 
 ///////////////////////////////////////////////////////////////////////////////
-/// @brief Function parameters for urCommandBufferRetainCommandExp
-/// @details Each entry is a pointer to the parameter passed to the function;
-///     allowing the callback the ability to modify the parameter's value
-typedef struct ur_command_buffer_retain_command_exp_params_t {
-  ur_exp_command_buffer_command_handle_t *phCommand;
-} ur_command_buffer_retain_command_exp_params_t;
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Function parameters for urCommandBufferReleaseCommandExp
-/// @details Each entry is a pointer to the parameter passed to the function;
-///     allowing the callback the ability to modify the parameter's value
-typedef struct ur_command_buffer_release_command_exp_params_t {
-  ur_exp_command_buffer_command_handle_t *phCommand;
-} ur_command_buffer_release_command_exp_params_t;
-
-///////////////////////////////////////////////////////////////////////////////
 /// @brief Function parameters for urCommandBufferUpdateKernelLaunchExp
 /// @details Each entry is a pointer to the parameter passed to the function;
 ///     allowing the callback the ability to modify the parameter's value
@@ -14549,61 +14211,6 @@ typedef struct ur_command_buffer_get_info_exp_params_t {
   void **ppPropValue;
   size_t **ppPropSizeRet;
 } ur_command_buffer_get_info_exp_params_t;
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Function parameters for urCommandBufferCommandGetInfoExp
-/// @details Each entry is a pointer to the parameter passed to the function;
-///     allowing the callback the ability to modify the parameter's value
-typedef struct ur_command_buffer_command_get_info_exp_params_t {
-  ur_exp_command_buffer_command_handle_t *phCommand;
-  ur_exp_command_buffer_command_info_t *ppropName;
-  size_t *ppropSize;
-  void **ppPropValue;
-  size_t **ppPropSizeRet;
-} ur_command_buffer_command_get_info_exp_params_t;
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Function parameters for urTensorMapEncodeIm2ColExp
-/// @details Each entry is a pointer to the parameter passed to the function;
-///     allowing the callback the ability to modify the parameter's value
-typedef struct ur_tensor_map_encode_im_2_col_exp_params_t {
-  ur_device_handle_t *phDevice;
-  ur_exp_tensor_map_data_type_flags_t *pTensorMapType;
-  uint32_t *pTensorRank;
-  void **pGlobalAddress;
-  const uint64_t **pGlobalDim;
-  const uint64_t **pGlobalStrides;
-  const int **pPixelBoxLowerCorner;
-  const int **pPixelBoxUpperCorner;
-  uint32_t *pChannelsPerPixel;
-  uint32_t *pPixelsPerColumn;
-  const uint32_t **pElementStrides;
-  ur_exp_tensor_map_interleave_flags_t *pInterleave;
-  ur_exp_tensor_map_swizzle_flags_t *pSwizzle;
-  ur_exp_tensor_map_l2_promotion_flags_t *pL2Promotion;
-  ur_exp_tensor_map_oob_fill_flags_t *pOobFill;
-  ur_exp_tensor_map_handle_t **phTensorMap;
-} ur_tensor_map_encode_im_2_col_exp_params_t;
-
-///////////////////////////////////////////////////////////////////////////////
-/// @brief Function parameters for urTensorMapEncodeTiledExp
-/// @details Each entry is a pointer to the parameter passed to the function;
-///     allowing the callback the ability to modify the parameter's value
-typedef struct ur_tensor_map_encode_tiled_exp_params_t {
-  ur_device_handle_t *phDevice;
-  ur_exp_tensor_map_data_type_flags_t *pTensorMapType;
-  uint32_t *pTensorRank;
-  void **pGlobalAddress;
-  const uint64_t **pGlobalDim;
-  const uint64_t **pGlobalStrides;
-  const uint32_t **pBoxDim;
-  const uint32_t **pElementStrides;
-  ur_exp_tensor_map_interleave_flags_t *pInterleave;
-  ur_exp_tensor_map_swizzle_flags_t *pSwizzle;
-  ur_exp_tensor_map_l2_promotion_flags_t *pL2Promotion;
-  ur_exp_tensor_map_oob_fill_flags_t *pOobFill;
-  ur_exp_tensor_map_handle_t **phTensorMap;
-} ur_tensor_map_encode_tiled_exp_params_t;
 
 ///////////////////////////////////////////////////////////////////////////////
 /// @brief Function parameters for urUsmP2PEnablePeerAccessExp

@@ -57,6 +57,7 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t hDevice,
 #endif
     return ReturnValue(VendorId);
   }
+  case UR_DEVICE_INFO_NUM_COMPUTE_UNITS:
   case UR_DEVICE_INFO_MAX_COMPUTE_UNITS: {
     int ComputeUnits = 0;
     UR_CHECK_ERROR(hipDeviceGetAttribute(
@@ -786,6 +787,10 @@ UR_APIEXPORT ur_result_t UR_APICALL urDeviceGetInfo(ur_device_handle_t hDevice,
   }
 
   case UR_DEVICE_INFO_KERNEL_SET_SPECIALIZATION_CONSTANTS: {
+    return ReturnValue(ur_bool_t{false});
+  }
+
+  case UR_DEVICE_INFO_PROGRAM_SET_SPECIALIZATION_CONSTANTS: {
     return ReturnValue(ur_bool_t{false});
   }
 

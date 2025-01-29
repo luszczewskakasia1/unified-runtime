@@ -324,6 +324,12 @@ ur_result_t urDeviceGetInfo(
 
     return ReturnValue(uint32_t{MaxComputeUnits});
   }
+  case UR_DEVICE_INFO_NUM_COMPUTE_UNITS: {
+    uint32_t NumComputeUnits =
+        Device->ZeDeviceProperties->numSubslicesPerSlice *
+        Device->ZeDeviceProperties->numSlices;
+    return ReturnValue(uint32_t{NumComputeUnits});
+  }
   case UR_DEVICE_INFO_MAX_WORK_ITEM_DIMENSIONS:
     // Level Zero spec defines only three dimensions
     return ReturnValue(uint32_t{3});
@@ -1156,6 +1162,8 @@ ur_result_t urDeviceGetInfo(
     // L0 does not support sampling 1D USM sampled image data.
     return ReturnValue(false);
   }
+  case UR_DEVICE_INFO_PROGRAM_SET_SPECIALIZATION_CONSTANTS:
+    return ReturnValue(true);
   case UR_DEVICE_INFO_KERNEL_SET_SPECIALIZATION_CONSTANTS:
     return ReturnValue(false);
   case UR_DEVICE_INFO_GLOBAL_VARIABLE_SUPPORT:
