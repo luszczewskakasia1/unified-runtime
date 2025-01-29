@@ -1,5 +1,5 @@
-on:
-  workflow_call:
+on: [push]
+  # workflow_call:
 
 permissions:
   contents: read
@@ -11,6 +11,8 @@ jobs:
         os: ['ubuntu-22.04', 'windows-2022']
 
     runs-on: ${{matrix.os}}
+    container:
+      image: kluszcze/ur:ubuntu-22.04
 
     steps:
     - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
