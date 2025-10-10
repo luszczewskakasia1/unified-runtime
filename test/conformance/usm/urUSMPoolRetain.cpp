@@ -8,7 +8,7 @@
 #include <uur/fixtures.h>
 
 using urUSMPoolRetainTest = uur::urUSMPoolTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urUSMPoolRetainTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urUSMPoolRetainTest);
 
 TEST_P(urUSMPoolRetainTest, Success) {
   uint32_t prevRefCount = 0;
@@ -21,7 +21,7 @@ TEST_P(urUSMPoolRetainTest, Success) {
 
   ASSERT_LT(prevRefCount, refCount);
 
-  EXPECT_SUCCESS(urUSMPoolRelease(pool));
+  ASSERT_SUCCESS(urUSMPoolRelease(pool));
 
   uint32_t afterRefCount = 0;
   ASSERT_SUCCESS(uur::GetObjectReferenceCount(pool, afterRefCount));

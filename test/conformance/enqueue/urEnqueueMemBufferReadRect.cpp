@@ -73,7 +73,7 @@ static std::vector<uur::test_parameters_t> generateParameterizations() {
 struct urEnqueueMemBufferReadRectTestWithParam
     : public uur::urQueueTestWithParam<uur::test_parameters_t> {};
 
-UUR_DEVICE_TEST_SUITE_P(
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
     urEnqueueMemBufferReadRectTestWithParam,
     testing::ValuesIn(generateParameterizations()),
     uur::printRectTestString<urEnqueueMemBufferReadRectTestWithParam>);
@@ -99,13 +99,13 @@ TEST_P(urEnqueueMemBufferReadRectTestWithParam, Success) {
   // The input will just be sequentially increasing values.
   std::vector<uint8_t> input(buffer_size, 0x0);
   std::iota(std::begin(input), std::end(input), 0x0);
-  EXPECT_SUCCESS(urEnqueueMemBufferWrite(queue, buffer, /* isBlocking */ true,
+  ASSERT_SUCCESS(urEnqueueMemBufferWrite(queue, buffer, /* isBlocking */ true,
                                          0, input.size(), input.data(), 0,
                                          nullptr, nullptr));
 
   // Enqueue the rectangular read.
   std::vector<uint8_t> output(host_size, 0x0);
-  EXPECT_SUCCESS(urEnqueueMemBufferReadRect(
+  ASSERT_SUCCESS(urEnqueueMemBufferReadRect(
       queue, buffer, /* isBlocking */ true, buffer_offset, host_offset, region,
       buffer_row_pitch, buffer_slice_pitch, host_row_pitch, host_slice_pitch,
       output.data(), 0, nullptr, nullptr));
@@ -119,81 +119,160 @@ TEST_P(urEnqueueMemBufferReadRectTestWithParam, Success) {
   EXPECT_EQ(expected, output);
 
   // Cleanup.
-  EXPECT_SUCCESS(urMemRelease(buffer));
+  ASSERT_SUCCESS(urMemRelease(buffer));
 }
 
-using urEnqueueMemBufferReadRectTest = uur::urMemBufferQueueTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urEnqueueMemBufferReadRectTest);
+struct urEnqueueMemBufferReadRectTest : public uur::urMemBufferQueueTest {
+  ur_rect_offset_t buffer_offset{0, 0, 0};
+  const ur_rect_offset_t host_offset{0, 0, 0};
+  ur_rect_region_t region{size, 1, 1};
+  size_t buffer_row_pitch = size;
+  size_t buffer_slice_pitch = size;
+  const size_t host_row_pitch = size;
+  size_t host_slice_pitch = size;
+};
+
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urEnqueueMemBufferReadRectTest);
+
 TEST_P(urEnqueueMemBufferReadRectTest, InvalidNullHandleQueue) {
   std::vector<uint32_t> dst(count);
-  ur_rect_region_t region{size, 1, 1};
-  ur_rect_offset_t buffer_offset{0, 0, 0};
-  ur_rect_offset_t host_offset{0, 0, 0};
+
   ASSERT_EQ_RESULT(UR_RESULT_ERROR_INVALID_NULL_HANDLE,
-                   urEnqueueMemBufferReadRect(nullptr, buffer, true,
-                                              buffer_offset, host_offset,
-                                              region, size, size, size, size,
-                                              dst.data(), 0, nullptr, nullptr));
+                   urEnqueueMemBufferReadRect(
+                       nullptr, buffer, true, buffer_offset, host_offset,
+                       region, buffer_row_pitch, buffer_slice_pitch,
+                       host_row_pitch, host_slice_pitch, dst.data(), 0, nullptr,
+                       nullptr));
 }
 
 TEST_P(urEnqueueMemBufferReadRectTest, InvalidNullHandleBuffer) {
   std::vector<uint32_t> dst(count);
-  ur_rect_region_t region{size, 1, 1};
-  ur_rect_offset_t buffer_offset{0, 0, 0};
-  ur_rect_offset_t host_offset{0, 0, 0};
   ASSERT_EQ_RESULT(UR_RESULT_ERROR_INVALID_NULL_HANDLE,
-                   urEnqueueMemBufferReadRect(queue, nullptr, true,
-                                              buffer_offset, host_offset,
-                                              region, size, size, size, size,
-                                              dst.data(), 0, nullptr, nullptr));
+                   urEnqueueMemBufferReadRect(
+                       queue, nullptr, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 0, nullptr, nullptr));
 }
 
 TEST_P(urEnqueueMemBufferReadRectTest, InvalidNullPointerDst) {
   std::vector<uint32_t> dst(count);
-  ur_rect_region_t region{size, 1, 1};
-  ur_rect_offset_t buffer_offset{0, 0, 0};
-  ur_rect_offset_t host_offset{0, 0, 0};
   ASSERT_EQ_RESULT(UR_RESULT_ERROR_INVALID_NULL_POINTER,
                    urEnqueueMemBufferReadRect(
                        queue, buffer, true, buffer_offset, host_offset, region,
-                       size, size, size, size, nullptr, 0, nullptr, nullptr));
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, nullptr, 0, nullptr, nullptr));
 }
 
 TEST_P(urEnqueueMemBufferReadRectTest, InvalidNullPtrEventWaitList) {
   UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
 
   std::vector<uint32_t> dst(count);
-  ur_rect_region_t region{size, 1, 1};
-  ur_rect_offset_t buffer_offset{0, 0, 0};
-  ur_rect_offset_t host_offset{0, 0, 0};
   ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
                        queue, buffer, true, buffer_offset, host_offset, region,
-                       size, size, size, size, dst.data(), 1, nullptr, nullptr),
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 1, nullptr, nullptr),
                    UR_RESULT_ERROR_INVALID_EVENT_WAIT_LIST);
 
   ur_event_handle_t validEvent;
   ASSERT_SUCCESS(urEnqueueEventsWait(queue, 0, nullptr, &validEvent));
 
-  ASSERT_EQ_RESULT(
-      urEnqueueMemBufferReadRect(queue, buffer, true, buffer_offset,
-                                 host_offset, region, size, size, size, size,
-                                 dst.data(), 0, &validEvent, nullptr),
-      UR_RESULT_ERROR_INVALID_EVENT_WAIT_LIST);
+  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
+                       queue, buffer, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 0, &validEvent, nullptr),
+                   UR_RESULT_ERROR_INVALID_EVENT_WAIT_LIST);
 
-  ur_event_handle_t inv_evt = nullptr;
-  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(queue, buffer, true,
-                                              buffer_offset, host_offset,
-                                              region, size, size, size, size,
-                                              dst.data(), 1, &inv_evt, nullptr),
+  ur_event_handle_t invalidEvent = nullptr;
+  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
+                       queue, buffer, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 1, &invalidEvent, nullptr),
                    UR_RESULT_ERROR_INVALID_EVENT_WAIT_LIST);
 
   ASSERT_SUCCESS(urEventRelease(validEvent));
 }
 
+TEST_P(urEnqueueMemBufferReadRectTest, InvalidSize) {
+  UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
+
+  std::vector<uint32_t> dst(count);
+
+  // region.width == 0 || region.height == 0 || region.depth == 0
+  region.width = 0;
+  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
+                       queue, buffer, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 0, nullptr, nullptr),
+                   UR_RESULT_ERROR_INVALID_SIZE);
+
+  // bufferRowPitch != 0 && bufferRowPitch < region.width
+  region.width = buffer_row_pitch + 1;
+  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
+                       queue, buffer, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 0, nullptr, nullptr),
+                   UR_RESULT_ERROR_INVALID_SIZE);
+
+  // hostRowPitch != 0 && hostRowPitch < region.width
+  region.width = host_row_pitch + 1;
+  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
+                       queue, buffer, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 0, nullptr, nullptr),
+                   UR_RESULT_ERROR_INVALID_SIZE);
+
+  // bufferSlicePitch != 0 && bufferSlicePitch < region.height * (bufferRowPitch
+  // != 0 ? bufferRowPitch : region.width)
+  region.width = size;
+  buffer_row_pitch = 16;
+  buffer_slice_pitch = (region.height * buffer_row_pitch) - 1;
+  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
+                       queue, buffer, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 0, nullptr, nullptr),
+                   UR_RESULT_ERROR_INVALID_SIZE);
+
+  // bufferSlicePitch != 0 && bufferSlicePitch % (bufferRowPitch != 0 ?
+  // bufferRowPitch : region.width) != 0
+  buffer_slice_pitch = size + 1;
+  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
+                       queue, buffer, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 0, nullptr, nullptr),
+                   UR_RESULT_ERROR_INVALID_SIZE);
+
+  // hostSlicePitch != 0 && hostSlicePitch < region.height * (hostRowPitch != 0
+  // ? hostRowPitch : region.width)
+  buffer_slice_pitch = size;
+  host_slice_pitch = (region.height * host_row_pitch) - 1;
+  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
+                       queue, buffer, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 0, nullptr, nullptr),
+                   UR_RESULT_ERROR_INVALID_SIZE);
+
+  // hostSlicePitch != 0 && hostSlicePitch % (hostRowPitch != 0 ? hostRowPitch :
+  // region.width) != 0
+  host_slice_pitch = size + 1;
+  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
+                       queue, buffer, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 0, nullptr, nullptr),
+                   UR_RESULT_ERROR_INVALID_SIZE);
+
+  // If the combination of bufferOrigin, region, bufferRowPitch, and
+  // bufferSlicePitch results in an out-of-bounds access.
+  buffer_offset = {std::numeric_limits<uint64_t>::max(), 1, 1};
+  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
+                       queue, buffer, true, buffer_offset, host_offset, region,
+                       buffer_row_pitch, buffer_slice_pitch, host_row_pitch,
+                       host_slice_pitch, dst.data(), 0, nullptr, nullptr),
+                   UR_RESULT_ERROR_INVALID_SIZE);
+}
+
 using urEnqueueMemBufferReadRectMultiDeviceTest =
     uur::urMultiDeviceMemBufferQueueTest;
-UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P(
-    urEnqueueMemBufferReadRectMultiDeviceTest);
+UUR_INSTANTIATE_PLATFORM_TEST_SUITE(urEnqueueMemBufferReadRectMultiDeviceTest);
 
 TEST_P(urEnqueueMemBufferReadRectMultiDeviceTest,
        WriteRectReadDifferentQueues) {
@@ -216,21 +295,4 @@ TEST_P(urEnqueueMemBufferReadRectMultiDeviceTest,
                                           output.data(), 0, nullptr, nullptr));
     ASSERT_EQ(input, output) << "Result on queue " << i << " did not match!";
   }
-}
-
-TEST_P(urEnqueueMemBufferReadRectTest, InvalidSize) {
-  UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
-
-  std::vector<uint32_t> dst(count);
-  // out-of-bounds access with potential overflow
-  ur_rect_region_t region{size, 1, 1};
-  ur_rect_offset_t buffer_offset{std::numeric_limits<uint64_t>::max(), 1, 1};
-  // Creating an overflow in host_offsets leads to a crash because
-  // the function doesn't do bounds checking of host buffers.
-  ur_rect_offset_t host_offset{0, 0, 0};
-
-  ASSERT_EQ_RESULT(urEnqueueMemBufferReadRect(
-                       queue, buffer, true, buffer_offset, host_offset, region,
-                       size, size, size, size, dst.data(), 0, nullptr, nullptr),
-                   UR_RESULT_ERROR_INVALID_SIZE);
 }

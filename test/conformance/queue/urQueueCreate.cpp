@@ -9,7 +9,7 @@
 #include <uur/known_failure.h>
 
 using urQueueCreateTest = uur::urContextTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urQueueCreateTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urQueueCreateTest);
 
 TEST_P(urQueueCreateTest, Success) {
   UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
@@ -28,7 +28,7 @@ TEST_P(urQueueCreateTest, Success) {
 }
 
 using urQueueCreateWithParamTest = uur::urContextTestWithParam<ur_queue_flag_t>;
-UUR_DEVICE_TEST_SUITE_P(
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
     urQueueCreateWithParamTest,
     testing::Values(UR_QUEUE_FLAG_OUT_OF_ORDER_EXEC_MODE_ENABLE,
                     UR_QUEUE_FLAG_PROFILING_ENABLE, UR_QUEUE_FLAG_ON_DEVICE,
@@ -39,7 +39,7 @@ UUR_DEVICE_TEST_SUITE_P(
                     UR_QUEUE_FLAG_SUBMISSION_IMMEDIATE,
                     UR_QUEUE_FLAG_USE_DEFAULT_STREAM,
                     UR_QUEUE_FLAG_SYNC_WITH_DEFAULT_STREAM,
-                    UR_QUEUE_FLAG_LOW_POWER_EVENTS_EXP),
+                    UR_QUEUE_FLAG_LOW_POWER_EVENTS_SUPPORT_EXP),
     uur::deviceTestWithParamPrinter<ur_queue_flag_t>);
 
 TEST_P(urQueueCreateWithParamTest, SuccessWithProperties) {
@@ -132,7 +132,7 @@ TEST_P(urQueueCreateTest, CheckContext) {
 }
 
 using urQueueCreateTestMultipleDevices = uur::urAllDevicesTest;
-UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P(urQueueCreateTestMultipleDevices);
+UUR_INSTANTIATE_PLATFORM_TEST_SUITE(urQueueCreateTestMultipleDevices);
 
 /* Create a queue using a context from a different device */
 TEST_P(urQueueCreateTestMultipleDevices, ContextFromWrongDevice) {

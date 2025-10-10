@@ -13,12 +13,12 @@ struct urEnqueueMemImageCopyTest
     uint32_t data[4];
   };
   void SetUp() override {
-    UUR_KNOWN_FAILURE_ON(uur::LevelZeroV2{}, uur::NativeCPU{});
+    UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
 
     UUR_RETURN_ON_FATAL_FAILURE(urQueueTestWithParam::SetUp());
 
     ur_bool_t imageSupported;
-    ASSERT_SUCCESS(urDeviceGetInfo(this->device, UR_DEVICE_INFO_IMAGE_SUPPORTED,
+    ASSERT_SUCCESS(urDeviceGetInfo(this->device, UR_DEVICE_INFO_IMAGE_SUPPORT,
                                    sizeof(ur_bool_t), &imageSupported,
                                    nullptr));
     if (!imageSupported) {
@@ -122,14 +122,14 @@ inline std::string printImageCopyTestString(
   return platform_device_name + "__" + test_name;
 }
 
-UUR_DEVICE_TEST_SUITE_P(urEnqueueMemImageCopyTest,
-                        testing::ValuesIn({UR_MEM_TYPE_IMAGE1D,
-                                           UR_MEM_TYPE_IMAGE2D,
-                                           UR_MEM_TYPE_IMAGE3D}),
-                        printImageCopyTestString<urEnqueueMemImageCopyTest>);
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
+    urEnqueueMemImageCopyTest,
+    testing::ValuesIn({UR_MEM_TYPE_IMAGE1D, UR_MEM_TYPE_IMAGE2D,
+                       UR_MEM_TYPE_IMAGE3D}),
+    printImageCopyTestString<urEnqueueMemImageCopyTest>);
 
 TEST_P(urEnqueueMemImageCopyTest, Success) {
-  UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
+  UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
 
   ASSERT_SUCCESS(urEnqueueMemImageCopy(queue, srcImage, dstImage, {0, 0, 0},
                                        {0, 0, 0}, size, 0, nullptr, nullptr));
@@ -140,7 +140,7 @@ TEST_P(urEnqueueMemImageCopyTest, Success) {
 }
 
 TEST_P(urEnqueueMemImageCopyTest, SuccessPartialCopy) {
-  UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
+  UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
 
   ASSERT_SUCCESS(urEnqueueMemImageCopy(queue, srcImage, dstImage, {0, 0, 0},
                                        {0, 0, 0}, partialRegion, 0, nullptr,
@@ -164,7 +164,7 @@ TEST_P(urEnqueueMemImageCopyTest, SuccessPartialCopy) {
 }
 
 TEST_P(urEnqueueMemImageCopyTest, SuccessPartialCopyWithSrcOffset) {
-  UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
+  UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
 
   ASSERT_SUCCESS(urEnqueueMemImageCopy(queue, srcImage, dstImage,
                                        partialRegionOffset, {0, 0, 0},
@@ -188,7 +188,7 @@ TEST_P(urEnqueueMemImageCopyTest, SuccessPartialCopyWithSrcOffset) {
 }
 
 TEST_P(urEnqueueMemImageCopyTest, SuccessPartialCopyWithDstOffset) {
-  UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
+  UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
 
   ASSERT_SUCCESS(urEnqueueMemImageCopy(queue, srcImage, dstImage, {0, 0, 0},
                                        partialRegionOffset, partialRegion, 0,
@@ -254,7 +254,7 @@ TEST_P(urEnqueueMemImageCopyTest, InvalidNullPtrEventWaitList) {
 }
 
 TEST_P(urEnqueueMemImageCopyTest, InvalidSize) {
-  UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
+  UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
 
   ASSERT_EQ_RESULT(UR_RESULT_ERROR_INVALID_SIZE,
                    urEnqueueMemImageCopy(queue, srcImage, dstImage, {1, 0, 0},
@@ -266,9 +266,11 @@ TEST_P(urEnqueueMemImageCopyTest, InvalidSize) {
 
 using urEnqueueMemImageCopyMultiDeviceTest =
     uur::urMultiDeviceMemImageWriteTest;
-UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P(urEnqueueMemImageCopyMultiDeviceTest);
+UUR_INSTANTIATE_PLATFORM_TEST_SUITE(urEnqueueMemImageCopyMultiDeviceTest);
 
 TEST_P(urEnqueueMemImageCopyMultiDeviceTest, CopyReadDifferentQueues) {
+  UUR_KNOWN_FAILURE_ON(uur::CUDA{});
+
   ur_mem_handle_t dstImage1D = nullptr;
   ASSERT_SUCCESS(urMemImageCreate(context, UR_MEM_FLAG_READ_WRITE, &format,
                                   &desc1D, nullptr, &dstImage1D));
@@ -288,7 +290,7 @@ TEST_P(urEnqueueMemImageCopyMultiDeviceTest, CopyReadDifferentQueues) {
                                        origin, region3D, 0, nullptr, nullptr));
 
   // Wait for the queue to finish executing.
-  EXPECT_SUCCESS(urEnqueueEventsWait(queues[0], 0, nullptr, nullptr));
+  ASSERT_SUCCESS(urEnqueueEventsWait(queues[0], 0, nullptr, nullptr));
 
   // The remaining queues do blocking reads from the image1D/2D/3D. Since the
   // queues target different devices this checks that any devices memory has

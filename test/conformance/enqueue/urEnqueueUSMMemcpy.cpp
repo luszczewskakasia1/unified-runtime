@@ -105,7 +105,7 @@ TEST_P(urEnqueueUSMMemcpyTest, BlockingWithEvent) {
       urEventGetInfo(memcpy_event, UR_EVENT_INFO_COMMAND_EXECUTION_STATUS,
                      sizeof(ur_event_status_t), &event_status, nullptr));
   ASSERT_EQ(event_status, UR_EVENT_STATUS_COMPLETE);
-  EXPECT_SUCCESS(urEventRelease(memcpy_event));
+  ASSERT_SUCCESS(urEventRelease(memcpy_event));
   ASSERT_NO_FATAL_FAILURE(verifyData());
 }
 
@@ -174,11 +174,11 @@ TEST_P(urEnqueueUSMMemcpyTest, InvalidNullPtrEventWaitList) {
                    UR_RESULT_ERROR_INVALID_EVENT_WAIT_LIST);
 }
 
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urEnqueueUSMMemcpyTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urEnqueueUSMMemcpyTest);
 
 struct urEnqueueUSMMemcpyMultiDeviceTest : uur::urAllDevicesTest {
   void SetUp() override {
-    uur::urAllDevicesTest::SetUp();
+    UUR_RETURN_ON_FATAL_FAILURE(uur::urAllDevicesTest::SetUp());
     for (auto &device : devices) {
       ur_device_usm_access_capability_flags_t device_usm = 0;
       ASSERT_SUCCESS(uur::GetDeviceUSMDeviceSupport(device, device_usm));
@@ -250,7 +250,7 @@ struct urEnqueueUSMMemcpyMultiDeviceTest : uur::urAllDevicesTest {
   size_t alloc_size = 64;
   uint8_t fill_pattern = 42;
 };
-UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P(urEnqueueUSMMemcpyMultiDeviceTest);
+UUR_INSTANTIATE_PLATFORM_TEST_SUITE(urEnqueueUSMMemcpyMultiDeviceTest);
 
 TEST_P(urEnqueueUSMMemcpyMultiDeviceTest, DeviceToDeviceCopyBlocking) {
   ASSERT_SUCCESS(urEnqueueUSMMemcpy(src_queue, true, dst_alloc, src_alloc,

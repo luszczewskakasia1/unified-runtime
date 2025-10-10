@@ -16,7 +16,7 @@ struct RAIIHipEvent {
 
   ~RAIIHipEvent() {
     if (handle) {
-      std::ignore = hipEventDestroy(handle);
+      (void)hipEventDestroy(handle);
     }
   }
 
@@ -25,7 +25,7 @@ struct RAIIHipEvent {
 };
 
 using urHipEventTest = uur::urContextTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urHipEventTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urHipEventTest);
 
 // Testing the urEventGetInfo behaviour for natively constructed (HIP) events.
 // Backend interop APIs can lead to creating event objects that are not fully

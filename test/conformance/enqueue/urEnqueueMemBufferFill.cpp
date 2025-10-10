@@ -14,6 +14,8 @@ struct testParametersFill {
 struct urEnqueueMemBufferFillTest
     : uur::urQueueTestWithParam<testParametersFill> {
   void SetUp() override {
+    // https://github.com/intel/llvm/issues/19604
+    UUR_KNOWN_FAILURE_ON(uur::LevelZeroV2{});
     UUR_RETURN_ON_FATAL_FAILURE(
         urQueueTestWithParam<testParametersFill>::SetUp());
     size = std::get<1>(GetParam()).size;
@@ -69,9 +71,9 @@ static std::vector<testParametersFill> test_cases{
     {256, 16},
     {256, 32}};
 
-UUR_DEVICE_TEST_SUITE_P(urEnqueueMemBufferFillTest,
-                        testing::ValuesIn(test_cases),
-                        uur::printFillTestString<urEnqueueMemBufferFillTest>);
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
+    urEnqueueMemBufferFillTest, testing::ValuesIn(test_cases),
+    uur::printFillTestString<urEnqueueMemBufferFillTest>);
 
 TEST_P(urEnqueueMemBufferFillTest, Success) {
   UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
@@ -147,7 +149,7 @@ TEST_P(urEnqueueMemBufferFillTest, SuccessOffset) {
 
 using urEnqueueMemBufferFillNegativeTest = uur::urMemBufferQueueTest;
 
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urEnqueueMemBufferFillNegativeTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urEnqueueMemBufferFillNegativeTest);
 
 TEST_P(urEnqueueMemBufferFillNegativeTest, InvalidNullHandleQueue) {
   const uint32_t pattern = 0xdeadbeef;
@@ -208,7 +210,7 @@ TEST_P(urEnqueueMemBufferFillNegativeTest, InvalidSize) {
 
 using urEnqueueMemBufferFillMultiDeviceTest =
     uur::urMultiDeviceMemBufferQueueTest;
-UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P(urEnqueueMemBufferFillMultiDeviceTest);
+UUR_INSTANTIATE_PLATFORM_TEST_SUITE(urEnqueueMemBufferFillMultiDeviceTest);
 
 TEST_P(urEnqueueMemBufferFillMultiDeviceTest, FillReadDifferentQueues) {
   // First queue does a fill.

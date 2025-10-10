@@ -20,13 +20,13 @@ struct urKernelGetGroupInfoFixedWorkGroupSizeTest : uur::urKernelTest {
   // In UR, this is on the left, so we reverse the order of these values.
   std::array<size_t, 3> work_group_size{2, 4, 8};
 };
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urKernelGetGroupInfoFixedWorkGroupSizeTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urKernelGetGroupInfoFixedWorkGroupSizeTest);
 
 TEST_P(urKernelGetGroupInfoFixedWorkGroupSizeTest,
        SuccessCompileWorkGroupSize) {
   UUR_KNOWN_FAILURE_ON(uur::CUDA{}, uur::HIP{});
 
-  ur_kernel_group_info_t property_name =
+  const ur_kernel_group_info_t property_name =
       UR_KERNEL_GROUP_INFO_COMPILE_WORK_GROUP_SIZE;
   size_t property_size = 0;
 
@@ -46,8 +46,9 @@ TEST_P(urKernelGetGroupInfoFixedWorkGroupSizeTest,
 
 struct urKernelGetGroupInfoMaxWorkGroupSizeTest : uur::urKernelTest {
   void SetUp() override {
-    UUR_KNOWN_FAILURE_ON(uur::CUDA{}, uur::HIP{},
-                         uur::OpenCL{"12th Gen", "13th Gen", "Intel(R) Xeon"});
+    UUR_KNOWN_FAILURE_ON(uur::CUDA{}, uur::HIP{});
+    // see https://github.com/oneapi-src/unified-runtime/issues/2644
+    UUR_KNOWN_FAILURE_ON(uur::OpenCL{"Intel(R) Core(TM)", "Intel(R) Xeon"});
     program_name = "max_wg_size";
     UUR_RETURN_ON_FATAL_FAILURE(urKernelTest::SetUp());
   }
@@ -59,11 +60,11 @@ struct urKernelGetGroupInfoMaxWorkGroupSizeTest : uur::urKernelTest {
   std::array<size_t, 3> max_work_group_size{2, 4, 8};
   size_t max_linear_work_group_size{64};
 };
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urKernelGetGroupInfoMaxWorkGroupSizeTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urKernelGetGroupInfoMaxWorkGroupSizeTest);
 
 TEST_P(urKernelGetGroupInfoMaxWorkGroupSizeTest,
        SuccessCompileMaxWorkGroupSize) {
-  ur_kernel_group_info_t property_name =
+  const ur_kernel_group_info_t property_name =
       UR_KERNEL_GROUP_INFO_COMPILE_MAX_WORK_GROUP_SIZE;
   size_t property_size = 0;
 
@@ -83,7 +84,7 @@ TEST_P(urKernelGetGroupInfoMaxWorkGroupSizeTest,
 
 TEST_P(urKernelGetGroupInfoMaxWorkGroupSizeTest,
        SuccessCompileMaxLinearWorkGroupSize) {
-  ur_kernel_group_info_t property_name =
+  const ur_kernel_group_info_t property_name =
       UR_KERNEL_GROUP_INFO_COMPILE_MAX_LINEAR_WORK_GROUP_SIZE;
   size_t property_size = 0;
 
@@ -101,10 +102,11 @@ TEST_P(urKernelGetGroupInfoMaxWorkGroupSizeTest,
 }
 
 using urKernelGetGroupInfoTest = uur::urKernelTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urKernelGetGroupInfoTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urKernelGetGroupInfoTest);
 
 TEST_P(urKernelGetGroupInfoTest, SuccessGlobalWorkSize) {
-  ur_kernel_group_info_t property_name = UR_KERNEL_GROUP_INFO_GLOBAL_WORK_SIZE;
+  const ur_kernel_group_info_t property_name =
+      UR_KERNEL_GROUP_INFO_GLOBAL_WORK_SIZE;
   size_t property_size = 0;
 
   ASSERT_SUCCESS_OR_OPTIONAL_QUERY(
@@ -120,7 +122,8 @@ TEST_P(urKernelGetGroupInfoTest, SuccessGlobalWorkSize) {
 }
 
 TEST_P(urKernelGetGroupInfoTest, SuccessWorkGroupSize) {
-  ur_kernel_group_info_t property_name = UR_KERNEL_GROUP_INFO_WORK_GROUP_SIZE;
+  const ur_kernel_group_info_t property_name =
+      UR_KERNEL_GROUP_INFO_WORK_GROUP_SIZE;
   size_t property_size = 0;
 
   ASSERT_SUCCESS_OR_OPTIONAL_QUERY(
@@ -129,14 +132,16 @@ TEST_P(urKernelGetGroupInfoTest, SuccessWorkGroupSize) {
       property_name);
   ASSERT_EQ(property_size, sizeof(size_t));
 
-  std::vector<char> property_value(property_size);
-  ASSERT_SUCCESS(urKernelGetGroupInfo(kernel, device, property_name,
-                                      property_size, property_value.data(),
-                                      nullptr));
+  size_t property_value = 0;
+  ASSERT_QUERY_RETURNS_VALUE(urKernelGetGroupInfo(kernel, device, property_name,
+                                                  property_size,
+                                                  &property_value, nullptr),
+                             property_value);
 }
 
 TEST_P(urKernelGetGroupInfoTest, SuccessLocalMemSize) {
-  ur_kernel_group_info_t property_name = UR_KERNEL_GROUP_INFO_LOCAL_MEM_SIZE;
+  const ur_kernel_group_info_t property_name =
+      UR_KERNEL_GROUP_INFO_LOCAL_MEM_SIZE;
   size_t property_size = 0;
 
   ASSERT_SUCCESS_OR_OPTIONAL_QUERY(
@@ -145,14 +150,15 @@ TEST_P(urKernelGetGroupInfoTest, SuccessLocalMemSize) {
       property_name);
   ASSERT_EQ(property_size, sizeof(size_t));
 
-  std::vector<char> property_value(property_size);
-  ASSERT_SUCCESS(urKernelGetGroupInfo(kernel, device, property_name,
-                                      property_size, property_value.data(),
-                                      nullptr));
+  size_t property_value = 0;
+  ASSERT_QUERY_RETURNS_VALUE(urKernelGetGroupInfo(kernel, device, property_name,
+                                                  property_size,
+                                                  &property_value, nullptr),
+                             property_value);
 }
 
 TEST_P(urKernelGetGroupInfoTest, SuccessPreferredWorkGroupSizeMultiple) {
-  ur_kernel_group_info_t property_name =
+  const ur_kernel_group_info_t property_name =
       UR_KERNEL_GROUP_INFO_PREFERRED_WORK_GROUP_SIZE_MULTIPLE;
   size_t property_size = 0;
 
@@ -162,14 +168,16 @@ TEST_P(urKernelGetGroupInfoTest, SuccessPreferredWorkGroupSizeMultiple) {
       property_name);
   ASSERT_EQ(property_size, sizeof(size_t));
 
-  std::vector<char> property_value(property_size);
-  ASSERT_SUCCESS(urKernelGetGroupInfo(kernel, device, property_name,
-                                      property_size, property_value.data(),
-                                      nullptr));
+  size_t property_value = 0;
+  ASSERT_QUERY_RETURNS_VALUE(urKernelGetGroupInfo(kernel, device, property_name,
+                                                  property_size,
+                                                  &property_value, nullptr),
+                             property_value);
 }
 
 TEST_P(urKernelGetGroupInfoTest, SuccessPrivateMemSize) {
-  ur_kernel_group_info_t property_name = UR_KERNEL_GROUP_INFO_PRIVATE_MEM_SIZE;
+  const ur_kernel_group_info_t property_name =
+      UR_KERNEL_GROUP_INFO_PRIVATE_MEM_SIZE;
   size_t property_size = 0;
 
   ASSERT_SUCCESS_OR_OPTIONAL_QUERY(
@@ -178,16 +186,17 @@ TEST_P(urKernelGetGroupInfoTest, SuccessPrivateMemSize) {
       property_name);
   ASSERT_EQ(property_size, sizeof(size_t));
 
-  std::vector<char> property_value(property_size);
-  ASSERT_SUCCESS(urKernelGetGroupInfo(kernel, device, property_name,
-                                      property_size, property_value.data(),
-                                      nullptr));
+  size_t property_value = 0;
+  ASSERT_QUERY_RETURNS_VALUE(urKernelGetGroupInfo(kernel, device, property_name,
+                                                  property_size,
+                                                  &property_value, nullptr),
+                             property_value);
 }
 
 TEST_P(urKernelGetGroupInfoTest, SuccessCompileWorkGroupSizeEmpty) {
   // Returns 0 by default when there is no specific information
   std::array<size_t, 3> read_dims{1, 1, 1};
-  std::array<size_t, 3> zero{0, 0, 0};
+  const std::array<size_t, 3> zero{0, 0, 0};
 
   ASSERT_SUCCESS(urKernelGetGroupInfo(
       kernel, device, UR_KERNEL_GROUP_INFO_COMPILE_WORK_GROUP_SIZE,
@@ -199,7 +208,7 @@ TEST_P(urKernelGetGroupInfoTest, SuccessCompileWorkGroupSizeEmpty) {
 TEST_P(urKernelGetGroupInfoTest, SuccessCompileMaxWorkGroupSizeEmpty) {
   // Returns 0 by default when there is no specific information
   std::array<size_t, 3> read_dims{1, 1, 1};
-  std::array<size_t, 3> zero{0, 0, 0};
+  const std::array<size_t, 3> zero{0, 0, 0};
 
   auto result = urKernelGetGroupInfo(
       kernel, device, UR_KERNEL_GROUP_INFO_COMPILE_MAX_WORK_GROUP_SIZE,

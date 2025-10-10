@@ -17,10 +17,10 @@ namespace v2 {
 
 static constexpr size_t EVENTS_BURST = 64;
 
-ur_pooled_event_t *event_pool::allocate() {
+ur_event_handle_t event_pool::allocate() {
   TRACK_SCOPE_LATENCY("event_pool::allocate");
 
-  std::unique_lock<std::mutex> lock(*mutex);
+  std::unique_lock<ur_mutex> lock(mutex);
 
   if (freelist.empty()) {
     auto start = events.size();
@@ -36,23 +36,24 @@ ur_pooled_event_t *event_pool::allocate() {
 
 #ifndef NDEBUG
   // Set the command type to an invalid value to catch any misuses in tests
-  event->resetQueueAndCommand(nullptr, UR_COMMAND_FORCE_UINT32);
+  event->setQueue(nullptr);
+  event->setCommandType(UR_COMMAND_FORCE_UINT32);
 #endif
 
   return event;
 }
 
-void event_pool::free(ur_pooled_event_t *event) {
+void event_pool::free(ur_event_handle_t event) {
   TRACK_SCOPE_LATENCY("event_pool::free");
 
-  std::unique_lock<std::mutex> lock(*mutex);
+  std::unique_lock<ur_mutex> lock(mutex);
 
   event->reset();
   freelist.push_back(event);
 
   // The event is still in the pool, so we need to increment the refcount
-  assert(event->RefCount.load() == 0);
-  event->RefCount.increment();
+  assert(event->RefCount.getCount() == 0);
+  event->RefCount.retain();
 }
 
 event_provider *event_pool::getProvider() const { return provider.get(); }

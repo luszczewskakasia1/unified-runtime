@@ -7,10 +7,11 @@
 
 using urVirtualMemReserveTestWithParam =
     uur::urVirtualMemGranularityTestWithParam<size_t>;
-UUR_DEVICE_TEST_SUITE_P(urVirtualMemReserveTestWithParam,
-                        ::testing::Values(2, 4, 8, 16, 32, 64, 128, 256, 512,
-                                          1024, 2048, 5000, 100000),
-                        uur::deviceTestWithParamPrinter<size_t>);
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(urVirtualMemReserveTestWithParam,
+                                 ::testing::Values(2, 4, 8, 16, 32, 64, 128,
+                                                   256, 512, 1024, 2048, 5000,
+                                                   100000),
+                                 uur::deviceTestWithParamPrinter<size_t>);
 
 TEST_P(urVirtualMemReserveTestWithParam, SuccessNoStartPointer) {
   // round up to nearest granularity
@@ -21,7 +22,7 @@ TEST_P(urVirtualMemReserveTestWithParam, SuccessNoStartPointer) {
                                      &virtual_mem_start));
   ASSERT_NE(virtual_mem_start, nullptr);
 
-  EXPECT_SUCCESS(
+  ASSERT_SUCCESS(
       urVirtualMemFree(context, virtual_mem_start, virtual_mem_size));
 }
 
@@ -40,12 +41,12 @@ TEST_P(urVirtualMemReserveTestWithParam, SuccessWithStartPointer) {
   ASSERT_NE(virtual_mem_ptr, nullptr);
 
   // both pointers have to be freed
-  EXPECT_SUCCESS(urVirtualMemFree(context, origin_ptr, page_size));
-  EXPECT_SUCCESS(urVirtualMemFree(context, virtual_mem_ptr, page_size));
+  ASSERT_SUCCESS(urVirtualMemFree(context, origin_ptr, page_size));
+  ASSERT_SUCCESS(urVirtualMemFree(context, virtual_mem_ptr, page_size));
 }
 
 using urVirtualMemReserveTest = uur::urVirtualMemGranularityTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urVirtualMemReserveTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urVirtualMemReserveTest);
 
 TEST_P(urVirtualMemReserveTest, InvalidNullHandleContext) {
   size_t page_size = uur::RoundUpToNearestFactor(1024, granularity);

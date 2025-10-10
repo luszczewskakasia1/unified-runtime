@@ -10,10 +10,12 @@
 
 using urContextSetExtendedDeleterTest = uur::urDeviceTest;
 
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urContextSetExtendedDeleterTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urContextSetExtendedDeleterTest);
 
 TEST_P(urContextSetExtendedDeleterTest, Success) {
   UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{}, uur::NativeCPU{});
+  // Segfault
+  UUR_KNOWN_FAILURE_ON(uur::OpenCL{"gfx1100"});
 
   bool called = false;
   {

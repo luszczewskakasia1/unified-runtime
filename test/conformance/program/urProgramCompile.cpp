@@ -6,8 +6,22 @@
 
 #include <uur/fixtures.h>
 
+using urProgramCompileWithParamTest = uur::urProgramTestWithParam<std::string>;
+
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(urProgramCompileWithParamTest,
+                                 ::testing::Values("-O0", "-O1", "-O2", "-O3"),
+                                 uur::deviceTestWithParamPrinter<std::string>);
+
+TEST_P(urProgramCompileWithParamTest, Success) {
+  const char *platformOption = nullptr;
+  ASSERT_SUCCESS(urPlatformGetBackendOption(platform, getParam().c_str(),
+                                            &platformOption));
+
+  ASSERT_SUCCESS(urProgramCompile(context, program, platformOption));
+}
+
 using urProgramCompileTest = uur::urProgramTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urProgramCompileTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urProgramCompileTest);
 
 TEST_P(urProgramCompileTest, Success) {
   ASSERT_SUCCESS(urProgramCompile(context, program, nullptr));

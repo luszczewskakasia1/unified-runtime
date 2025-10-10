@@ -7,7 +7,7 @@
 #include <uur/known_failure.h>
 
 using urDeviceSelectBinaryTest = uur::urDeviceTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urDeviceSelectBinaryTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urDeviceSelectBinaryTest);
 
 static constexpr ur_device_binary_t binaries[] = {
     {UR_STRUCTURE_TYPE_DEVICE_BINARY, nullptr, UR_DEVICE_BINARY_TARGET_UNKNOWN},
@@ -34,9 +34,10 @@ TEST_P(urDeviceSelectBinaryTest, Success) {
 }
 
 TEST_P(urDeviceSelectBinaryTest, InvalidNullHandleDevice) {
-  ASSERT_EQ_RESULT(
-      UR_RESULT_ERROR_INVALID_NULL_HANDLE,
-      urDeviceSelectBinary(nullptr, binaries, binaries_length, nullptr));
+  uint32_t selected_binary;
+  ASSERT_EQ_RESULT(UR_RESULT_ERROR_INVALID_NULL_HANDLE,
+                   urDeviceSelectBinary(nullptr, binaries, binaries_length,
+                                        &selected_binary));
 }
 
 TEST_P(urDeviceSelectBinaryTest, InvalidNullPointerBinaries) {

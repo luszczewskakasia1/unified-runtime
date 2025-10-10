@@ -60,7 +60,7 @@ struct QueueEmptyStatusTestWithParam : uur::IntegrationQueueTestWithParam {
     for (uint32_t i = 0; i < num_iterations; ++i) {
       ASSERT_SUCCESS(urEnqueueKernelLaunch(Queue, kernel, n_dimensions,
                                            &global_offset, &ArraySize, nullptr,
-                                           0, nullptr, &Event));
+                                           0, nullptr, 0, nullptr, &Event));
       ASSERT_NO_FATAL_FAILURE(submitBarrierIfNeeded(Event));
     }
 
@@ -98,7 +98,7 @@ struct QueueEmptyStatusTestWithParam : uur::IntegrationQueueTestWithParam {
   void *SharedMem = nullptr;
 };
 
-UUR_DEVICE_TEST_SUITE_P(
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
     QueueEmptyStatusTestWithParam,
     testing::Values(0, /* In-Order */
                     UR_QUEUE_FLAG_OUT_OF_ORDER_EXEC_MODE_ENABLE),

@@ -9,9 +9,11 @@
 using urCommandBufferRetainExpTest =
     uur::command_buffer::urCommandBufferExpTest;
 
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urCommandBufferRetainExpTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urCommandBufferRetainExpTest);
 
 TEST_P(urCommandBufferRetainExpTest, Success) {
+  // https://github.com/intel/llvm/issues/19139
+  UUR_KNOWN_FAILURE_ON(uur::OpenCL{});
   uint32_t prev_ref_count = 0;
   EXPECT_SUCCESS(uur::GetObjectReferenceCount(cmd_buf_handle, prev_ref_count));
 

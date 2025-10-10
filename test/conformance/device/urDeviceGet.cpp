@@ -6,8 +6,20 @@
 
 #include <uur/fixtures.h>
 
-using urDeviceGetTest = uur::urPlatformTest;
-UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P(urDeviceGetTest);
+struct urDeviceGetTest : uur::urPlatformTest {
+  void SetUp() override {
+    UUR_RETURN_ON_FATAL_FAILURE(uur::urPlatformTest::SetUp());
+
+    // These tests require at least one device in the platform
+    uint32_t totalCount = 0;
+    ASSERT_SUCCESS(
+        urDeviceGet(platform, UR_DEVICE_TYPE_ALL, 0, nullptr, &totalCount));
+    if (!totalCount) {
+      GTEST_SKIP() << "Platform has no devices";
+    }
+  }
+};
+UUR_INSTANTIATE_PLATFORM_TEST_SUITE(urDeviceGetTest);
 
 TEST_P(urDeviceGetTest, Success) {
   uint32_t count = 0;
@@ -71,11 +83,12 @@ TEST_P(urDeviceGetTest, InvalidNullPointerDevices) {
 using urDeviceGetTestWithDeviceTypeParam =
     uur::urPlatformTestWithParam<ur_device_type_t>;
 
-UUR_PLATFORM_TEST_SUITE_P(
+UUR_PLATFORM_TEST_SUITE_WITH_PARAM(
     urDeviceGetTestWithDeviceTypeParam,
     ::testing::Values(UR_DEVICE_TYPE_DEFAULT, UR_DEVICE_TYPE_GPU,
                       UR_DEVICE_TYPE_CPU, UR_DEVICE_TYPE_FPGA,
-                      UR_DEVICE_TYPE_MCA, UR_DEVICE_TYPE_VPU),
+                      UR_DEVICE_TYPE_MCA, UR_DEVICE_TYPE_VPU,
+                      UR_DEVICE_TYPE_CUSTOM),
     uur::platformTestWithParamPrinter<ur_device_type_t>);
 
 TEST_P(urDeviceGetTestWithDeviceTypeParam, Success) {

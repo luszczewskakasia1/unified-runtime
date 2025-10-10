@@ -9,6 +9,7 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include <optional>
 #include <ur/ur.hpp>
 #include <ur_api.h>
 #include <ze_api.h>
@@ -16,6 +17,7 @@
 
 #include "common.hpp"
 
+#include "common/ur_ref_count.hpp"
 #include "context.hpp"
 #include "kernel.hpp"
 #include "queue.hpp"
@@ -25,7 +27,7 @@ struct command_buffer_profiling_t {
   ze_kernel_timestamp_result_t *Timestamps;
 };
 
-struct ur_exp_command_buffer_handle_t_ : public _ur_object {
+struct ur_exp_command_buffer_handle_t_ : public ur_object {
   ur_exp_command_buffer_handle_t_(
       ur_context_handle_t Context, ur_device_handle_t Device,
       ze_command_list_handle_t CommandList,
@@ -110,6 +112,8 @@ struct ur_exp_command_buffer_handle_t_ : public _ur_object {
   // This flag must be set to false if at least one copy command has been
   // added to `ZeCopyCommandList`
   bool MCopyCommandListEmpty = true;
+  // This flag tracks if the previous node submission was of a copy type.
+  std::optional<bool> MWasPrevCopyCommandList;
   // [WaitEvent Path only] Level Zero fences for each queue the command-buffer
   // has been enqueued to. These should be destroyed when the command-buffer is
   // released.
@@ -133,7 +137,9 @@ struct ur_exp_command_buffer_handle_t_ : public _ur_object {
   bool IsFinalized = false;
   // Command-buffer profiling is enabled.
   bool IsProfilingEnabled = false;
-  // Command-buffer can be submitted to an in-order command-list.
+  // User requested an in-order UR command-buffer
+  bool InOrderRequested = false;
+  // Command-buffer will be created from an in-order command-list.
   bool IsInOrderCmdList = false;
   // Whether this command-buffer should use the code path that uses
   // zeCommandListImmediateAppendCommandListsExp during enqueue.
@@ -141,43 +147,9 @@ struct ur_exp_command_buffer_handle_t_ : public _ur_object {
   // This list is needed to release all kernels retained by the
   // command_buffer.
   std::vector<ur_kernel_handle_t> KernelsList;
-  // Track whether synchronization is required when updating the command-buffer
-  // Set this value to true when a command-buffer is enqueued, and false after
-  // any fence or event synchronization to avoid repeated calls to synchronize.
-  bool NeedsUpdateSynchronization = false;
   // Track handle objects to free when command-buffer is destroyed.
   std::vector<std::unique_ptr<ur_exp_command_buffer_command_handle_t_>>
       CommandHandles;
-};
 
-struct ur_exp_command_buffer_command_handle_t_ : public _ur_object {
-  ur_exp_command_buffer_command_handle_t_(
-      ur_exp_command_buffer_handle_t CommandBuffer, uint64_t CommandId)
-      : CommandBuffer(CommandBuffer), CommandId(CommandId) {}
-
-  virtual ~ur_exp_command_buffer_command_handle_t_() {}
-
-  // Command-buffer of this command.
-  ur_exp_command_buffer_handle_t CommandBuffer;
-  // L0 command ID identifying this command
-  uint64_t CommandId;
-};
-
-struct kernel_command_handle : public ur_exp_command_buffer_command_handle_t_ {
-  kernel_command_handle(ur_exp_command_buffer_handle_t CommandBuffer,
-                        ur_kernel_handle_t Kernel, uint64_t CommandId,
-                        uint32_t WorkDim, bool UserDefinedLocalSize,
-                        uint32_t NumKernelAlternatives,
-                        ur_kernel_handle_t *KernelAlternatives);
-
-  ~kernel_command_handle();
-
-  // Work-dimension the command was originally created with.
-  uint32_t WorkDim;
-  // Set to true if the user set the local work size on command creation.
-  bool UserDefinedLocalSize;
-  // Currently active kernel handle
-  ur_kernel_handle_t Kernel;
-  // Storage for valid kernel alternatives for this command.
-  std::unordered_set<ur_kernel_handle_t> ValidKernelHandles;
+  ur::RefCount RefCount;
 };

@@ -7,11 +7,20 @@
 #include <uur/fixtures.h>
 
 using urProgramRetainTest = uur::urProgramTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urProgramRetainTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urProgramRetainTest);
 
 TEST_P(urProgramRetainTest, Success) {
+  uint32_t prevRefCount = 0;
+  ASSERT_SUCCESS(uur::GetObjectReferenceCount(program, prevRefCount));
+
   ASSERT_SUCCESS(urProgramRetain(program));
-  EXPECT_SUCCESS(urProgramRelease(program));
+
+  uint32_t refCount = 0;
+  ASSERT_SUCCESS(uur::GetObjectReferenceCount(program, refCount));
+
+  ASSERT_LT(prevRefCount, refCount);
+
+  ASSERT_SUCCESS(urProgramRetain(program));
 }
 
 TEST_P(urProgramRetainTest, InvalidNullHandleProgram) {

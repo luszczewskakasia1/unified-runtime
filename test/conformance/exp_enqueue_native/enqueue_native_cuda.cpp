@@ -12,7 +12,7 @@
 using T = uint32_t;
 
 struct urCudaEnqueueNativeCommandTest : uur::urQueueTest {
-  void SetUp() {
+  void SetUp() override {
     UUR_KNOWN_FAILURE_ON(uur::LevelZeroV2{});
 
     UUR_RETURN_ON_FATAL_FAILURE(uur::urQueueTest::SetUp());
@@ -38,7 +38,7 @@ struct urCudaEnqueueNativeCommandTest : uur::urQueueTest {
   static constexpr size_t allocation_size = sizeof(val) * global_size;
 };
 
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urCudaEnqueueNativeCommandTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urCudaEnqueueNativeCommandTest);
 
 struct InteropData1 {
   void *fill_ptr;

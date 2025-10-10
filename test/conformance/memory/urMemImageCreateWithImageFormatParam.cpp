@@ -66,12 +66,16 @@ std::vector<ur_image_format_t> all_image_formats;
 
 struct urMemImageCreateTestWithImageFormatParam
     : uur::urContextTestWithParam<ur_image_format_t> {
-  void SetUp() {
-    UUR_KNOWN_FAILURE_ON(uur::OpenCL{"Intel(R) FPGA"});
+  void SetUp() override {
     UUR_RETURN_ON_FATAL_FAILURE(
         uur::urContextTestWithParam<ur_image_format_t>::SetUp());
+    bool image_support = false;
+    ASSERT_SUCCESS(uur::GetDeviceImageSupport(device, image_support));
+    if (!image_support) {
+      GTEST_SKIP() << "Device doesn't support images";
+    }
   }
-  void TearDown() {
+  void TearDown() override {
     UUR_RETURN_ON_FATAL_FAILURE(
         uur::urContextTestWithParam<ur_image_format_t>::TearDown());
   }
@@ -86,21 +90,25 @@ struct urMemImageCreateTestWithImageFormatParam
   }
 };
 
-UUR_DEVICE_TEST_SUITE_P(
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
     urMemImageCreateTestWithImageFormatParam,
     ::testing::ValuesIn(
         urMemImageCreateTestWithImageFormatParam::makeImageFormats()),
     uur::deviceTestWithParamPrinter<ur_image_format_t>);
 
 TEST_P(urMemImageCreateTestWithImageFormatParam, Success) {
-  UUR_KNOWN_FAILURE_ON(uur::LevelZeroV2{}, uur::NativeCPU{},
-                       uur::OpenCL{"Intel(R) UHD Graphics 770"});
+  UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
+  // See https://github.com/oneapi-src/unified-runtime/issues/2638
+  UUR_KNOWN_FAILURE_ON(uur::OpenCL{"Intel(R) UHD Graphics 770"});
+  // Reports INVALID_IMAGE_FORMAT_DESCRIPTOR rather than
+  // UNSUPPORTED_IMAGE_FORMAT
+  UUR_KNOWN_FAILURE_ON(uur::OpenCL{"gfx1100"});
 
   ur_image_channel_order_t channel_order = std::get<1>(GetParam()).channelOrder;
   ur_image_channel_type_t channel_type = std::get<1>(GetParam()).channelType;
 
   if (channel_order == UR_IMAGE_CHANNEL_ORDER_RGBA) {
-    UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
+    UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
   }
 
   ur_image_format_t image_format{channel_order, channel_type};

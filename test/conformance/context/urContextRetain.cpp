@@ -7,7 +7,7 @@
 #include <uur/fixtures.h>
 
 using urContextRetainTest = uur::urContextTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urContextRetainTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urContextRetainTest);
 
 TEST_P(urContextRetainTest, Success) {
   uint32_t prevRefCount = 0;
@@ -20,7 +20,7 @@ TEST_P(urContextRetainTest, Success) {
 
   ASSERT_LT(prevRefCount, refCount);
 
-  EXPECT_SUCCESS(urContextRelease(context));
+  ASSERT_SUCCESS(urContextRelease(context));
 }
 
 TEST_P(urContextRetainTest, InvalidNullHandleContext) {

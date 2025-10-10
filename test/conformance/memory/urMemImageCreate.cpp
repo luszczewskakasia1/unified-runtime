@@ -26,8 +26,13 @@ static ur_image_desc_t image_desc{
 
 struct urMemImageCreateTest : public uur::urContextTest {
   void SetUp() override {
-    UUR_KNOWN_FAILURE_ON(uur::OpenCL{"Intel(R) FPGA"});
     UUR_RETURN_ON_FATAL_FAILURE(uur::urContextTest::SetUp());
+
+    bool image_support = false;
+    ASSERT_SUCCESS(uur::GetDeviceImageSupport(device, image_support));
+    if (!image_support) {
+      GTEST_SKIP() << "Device doesn't support images";
+    }
 
     uur::raii::Mem image_handle = nullptr;
     auto ret = urMemImageCreate(context, UR_MEM_FLAG_READ_WRITE, &image_format,
@@ -36,6 +41,8 @@ struct urMemImageCreateTest : public uur::urContextTest {
     if (ret == UR_RESULT_ERROR_UNSUPPORTED_FEATURE) {
       GTEST_SKIP() << "urMemImageCreate not supported";
     }
+
+    ASSERT_SUCCESS(ret);
   }
 
   void TearDown() override {
@@ -43,13 +50,19 @@ struct urMemImageCreateTest : public uur::urContextTest {
   }
 };
 
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urMemImageCreateTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urMemImageCreateTest);
 
 template <typename Param>
 struct urMemImageCreateTestWithParam
     : public uur::urContextTestWithParam<Param> {
   void SetUp() override {
     UUR_RETURN_ON_FATAL_FAILURE(uur::urContextTestWithParam<Param>::SetUp());
+
+    bool image_support = false;
+    ASSERT_SUCCESS(uur::GetDeviceImageSupport(this->device, image_support));
+    if (!image_support) {
+      GTEST_SKIP() << "Device doesn't support images";
+    }
 
     uur::raii::Mem image_handle = nullptr;
     auto ret =
@@ -59,6 +72,8 @@ struct urMemImageCreateTestWithParam
     if (ret == UR_RESULT_ERROR_UNSUPPORTED_FEATURE) {
       GTEST_SKIP() << "urMemImageCreate not supported";
     }
+
+    ASSERT_SUCCESS(ret);
   }
 
   void TearDown() override {
@@ -69,17 +84,13 @@ struct urMemImageCreateTestWithParam
 using urMemImageCreateTestWith1DMemoryTypeParam =
     urMemImageCreateTestWithParam<ur_mem_type_t>;
 
-UUR_DEVICE_TEST_SUITE_P(urMemImageCreateTestWith1DMemoryTypeParam,
-                        ::testing::Values(UR_MEM_TYPE_IMAGE1D,
-                                          UR_MEM_TYPE_IMAGE1D_ARRAY),
-                        uur::deviceTestWithParamPrinter<ur_mem_type_t>);
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
+    urMemImageCreateTestWith1DMemoryTypeParam,
+    ::testing::Values(UR_MEM_TYPE_IMAGE1D, UR_MEM_TYPE_IMAGE1D_ARRAY),
+    uur::deviceTestWithParamPrinter<ur_mem_type_t>);
 
 TEST_P(urMemImageCreateTestWith1DMemoryTypeParam, Success) {
   UUR_KNOWN_FAILURE_ON(uur::OpenCL{"Intel(R) FPGA"});
-
-  if (getParam() == UR_MEM_TYPE_IMAGE1D_ARRAY) {
-    UUR_KNOWN_FAILURE_ON(uur::CUDA{});
-  }
 
   ur_image_desc_t image_desc_with_param{
       UR_STRUCTURE_TYPE_IMAGE_DESC, ///< [in] type of this structure
@@ -105,17 +116,13 @@ TEST_P(urMemImageCreateTestWith1DMemoryTypeParam, Success) {
 using urMemImageCreateTestWith2DMemoryTypeParam =
     urMemImageCreateTestWithParam<ur_mem_type_t>;
 
-UUR_DEVICE_TEST_SUITE_P(urMemImageCreateTestWith2DMemoryTypeParam,
-                        ::testing::Values(UR_MEM_TYPE_IMAGE2D,
-                                          UR_MEM_TYPE_IMAGE2D_ARRAY),
-                        uur::deviceTestWithParamPrinter<ur_mem_type_t>);
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
+    urMemImageCreateTestWith2DMemoryTypeParam,
+    ::testing::Values(UR_MEM_TYPE_IMAGE2D, UR_MEM_TYPE_IMAGE2D_ARRAY),
+    uur::deviceTestWithParamPrinter<ur_mem_type_t>);
 
 TEST_P(urMemImageCreateTestWith2DMemoryTypeParam, Success) {
   UUR_KNOWN_FAILURE_ON(uur::OpenCL{"Intel(R) FPGA"});
-
-  if (getParam() == UR_MEM_TYPE_IMAGE2D_ARRAY) {
-    UUR_KNOWN_FAILURE_ON(uur::CUDA{});
-  }
 
   ur_image_desc_t image_desc_with_param{
       UR_STRUCTURE_TYPE_IMAGE_DESC, ///< [in] type of this structure
@@ -203,7 +210,7 @@ TEST_P(urMemImageCreateTest, InvalidSize) {
                        uur::OpenCL{"Intel(R) UHD Graphics 770"});
 
   // This fail is specific to the "Multi device testing" ci job.
-  UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
+  UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
 
   uur::raii::Mem image_handle = nullptr;
 
@@ -234,7 +241,7 @@ TEST_P(urMemImageCreateTest, InvalidSize) {
 
 TEST_P(urMemImageCreateTest, InvalidImageDescStype) {
   // This fail is specific to the "Multi device testing" ci job.
-  UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
+  UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
 
   uur::raii::Mem image_handle = nullptr;
   ur_image_desc_t invalid_image_desc = image_desc;
@@ -326,16 +333,17 @@ TEST_P(urMemImageCreateTest, InvalidHostPtrValidHost) {
 using urMemImageCreateWithHostPtrFlagsTest =
     urMemImageCreateTestWithParam<ur_mem_flag_t>;
 
-UUR_DEVICE_TEST_SUITE_P(urMemImageCreateWithHostPtrFlagsTest,
-                        ::testing::Values(UR_MEM_FLAG_ALLOC_COPY_HOST_POINTER,
-                                          UR_MEM_FLAG_USE_HOST_POINTER),
-                        uur::deviceTestWithParamPrinter<ur_mem_flag_t>);
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
+    urMemImageCreateWithHostPtrFlagsTest,
+    ::testing::Values(UR_MEM_FLAG_ALLOC_COPY_HOST_POINTER,
+                      UR_MEM_FLAG_USE_HOST_POINTER),
+    uur::deviceTestWithParamPrinter<ur_mem_flag_t>);
 
 TEST_P(urMemImageCreateWithHostPtrFlagsTest, Success) {
   UUR_KNOWN_FAILURE_ON(uur::OpenCL{"Intel(R) FPGA"});
 
   // This fail is specific to the "Multi device testing" ci job.
-  UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
+  UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
 
   uur::raii::Mem host_ptr_buffer = nullptr;
   ASSERT_SUCCESS(urMemImageCreate(context, UR_MEM_FLAG_ALLOC_HOST_POINTER,

@@ -1,15 +1,8 @@
 # Unified Runtime
 
-[![Build and test](https://github.com/oneapi-src/unified-runtime/actions/workflows/cmake.yml/badge.svg)](https://github.com/oneapi-src/unified-runtime/actions/workflows/cmake.yml)
-[![Bandit](https://github.com/oneapi-src/unified-runtime/actions/workflows/bandit.yml/badge.svg)](https://github.com/oneapi-src/unified-runtime/actions/workflows/bandit.yml)
-[![CodeQL](https://github.com/oneapi-src/unified-runtime/actions/workflows/codeql.yml/badge.svg)](https://github.com/oneapi-src/unified-runtime/actions/workflows/codeql.yml)
-[![Coverity build](https://github.com/oneapi-src/unified-runtime/actions/workflows/coverity.yml/badge.svg?branch=main)](https://github.com/oneapi-src/unified-runtime/actions/workflows/coverity.yml)
-[![Coverity report](https://scan.coverity.com/projects/28213/badge.svg)](https://scan.coverity.com/projects/oneapi-src-unified-runtime)
-[![Nightly](https://github.com/oneapi-src/unified-runtime/actions/workflows/nightly.yml/badge.svg)](https://github.com/oneapi-src/unified-runtime/actions/workflows/nightly.yml)
+[![Deploy documentation to Pages](https://github.com/oneapi-src/unified-runtime/actions/workflows/docs.yml/badge.svg)](https://github.com/oneapi-src/unified-runtime/actions/workflows/docs.yml)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/oneapi-src/unified-runtime/badge)](https://securityscorecards.dev/viewer/?uri=github.com/oneapi-src/unified-runtime)
 [![Trivy](https://github.com/oneapi-src/unified-runtime/actions/workflows/trivy.yml/badge.svg)](https://github.com/oneapi-src/unified-runtime/actions/workflows/trivy.yml)
-[![Deploy documentation to Pages](https://github.com/oneapi-src/unified-runtime/actions/workflows/docs.yml/badge.svg)](https://github.com/oneapi-src/unified-runtime/actions/workflows/docs.yml)
-[![Compute Benchmarks Nightly](https://github.com/oneapi-src/unified-runtime/actions/workflows/benchmarks-nightly.yml/badge.svg)](https://github.com/oneapi-src/unified-runtime/actions/workflows/benchmarks-nightly.yml)
 
 <!-- TODO: add general description and purpose of the project -->
 
@@ -33,9 +26,15 @@
     - [Documentation](#documentation)
   - [Release Process](#release-process)
 
-## Contents of the repo
+## Contents of the project
 
-This repo contains the following:
+⚠️ **This repository is only a mirror.**
+
+The source code of Unified Runtime has been moved to [intel/llvm](https://github.com/intel/llvm)
+under the [unified-runtime](https://github.com/intel/llvm/tree/sycl/unified-runtime) top-level directory,
+all future development will now be carried out there.
+
+This project contains the following:
 
 - API specification in YaML
 - API programming guide in RST
@@ -65,14 +64,6 @@ FetchContent_MakeAvailable(unified-runtime)
 add_executable(example example.cpp)
 target_link_libraries(example PUBLIC unified-runtime::headers)
 ```
-
-### Weekly tags
-
-Each Friday at 23:00 UTC time a [prerelease
-tag](https://github.com/oneapi-src/unified-runtime/releases) is created which
-takes the form `weekly-YYYY-MM-DD`. These tags should be used by downstream
-projects which intend to track development closely but maintain a fixed point in
-history to avoid pulling potentially breaking changes from the `main` branch.
 
 ## Third-Party tools
 
@@ -142,8 +133,7 @@ List of options provided by CMake:
 | UR_ENABLE_SANITIZER | Enable device sanitizer layer | ON/OFF | ON |
 | UR_CONFORMANCE_TARGET_TRIPLES | SYCL triples to build CTS device binaries for | Comma-separated list | spir64 |
 | UR_CONFORMANCE_AMD_ARCH | AMD device target ID to build CTS binaries for | string | `""` |
-| UR_CONFORMANCE_ENABLE_MATCH_FILES | Enable CTS match files | ON/OFF | ON |
-| UR_CONFORMANCE_TEST_LOADER | Additionally build and run "loader" tests for the CTS | ON/OFF | OFF |
+| UR_CONFORMANCE_SELECTOR | `ONEAPI_DEVICE_SELECTOR` for conformance testing | string | All enabled adapters |
 | UR_BUILD_ADAPTER_L0     | Build the Level-Zero adapter            | ON/OFF     | OFF     |
 | UR_BUILD_ADAPTER_OPENCL | Build the OpenCL adapter                | ON/OFF     | OFF     |
 | UR_BUILD_ADAPTER_CUDA   | Build the CUDA adapter                  | ON/OFF     | OFF     |
@@ -154,7 +144,7 @@ List of options provided by CMake:
 | UR_STATIC_ADAPTER_L0    | Build the Level-Zero adapter as static and embed in the loader | ON/OFF   | OFF |
 | UR_HIP_PLATFORM         | Build HIP adapter for AMD or NVIDIA platform           | AMD/NVIDIA | AMD     |
 | UR_ENABLE_COMGR         | Enable comgr lib usage           | AMD/NVIDIA | AMD     |
-| UR_DPCXX | Path of the DPC++ compiler executable to build CTS device binaries | File path | `""` |
+| UR_DPCXX | Path of the DPC++ compiler executable to build device binaries for testing | File path | `""` |
 | UR_DEVICE_CODE_EXTRACTOR | Path of the `clang-offload-extract` executable from the DPC++ package, required for CTS device binaries | File path | `"${dirname(UR_DPCXX)}/clang-offload-extract"` |
 | UR_DPCXX_BUILD_FLAGS | Build flags to pass to DPC++ when compiling device programs | Space-separated options list | `""` |
 | UR_SYCL_LIBRARY_DIR | Path of the SYCL runtime library directory to build CTS device binaries | Directory path | `""` |
@@ -163,14 +153,28 @@ List of options provided by CMake:
 | UR_HIP_HSA_INCLUDE_DIRS | Path of the ROCm HSA include directory | Directory path | `${UR_HIP_ROCM_DIR}/hsa/include;${UR_HIP_ROCM_DIR}/include` |
 | UR_HIP_LIB_DIR | Path of the ROCm HIP library directory | Directory path | `${UR_HIP_ROCM_DIR}/lib` |
 
-### Additional make targets
+### Testing
 
-To run tests, do the following:
+Unified Runtime uses `lit` and `FileCheck` as part of its test suite. When built as
+part of an LLVM build, the binaries provided by LLVM will be used. When built standalone,
+both `lit` and `FileCheck` (or `filecheck`) must be visible on `$PATH`. The easiest way
+to do this is to install the Python packages for `lit` and `filecheck`.
+
+```bash
+$ source .venv/bin/activate
+$ pip install -r third_party/requirements_testing.txt
+```
+
+> Note: `filecheck` requires Python >= 3.10; if you get errors claiming that `filecheck` is not available, update your Python version or disable testing.
+
+Once installed, tests can be executed using:
 
 ```bash
 $ make
 $ make test
 ```
+
+### Additional make targets
 
 To run automated code formatting, configure CMake with `UR_FORMAT_CPP_STYLE` option
 and then run a custom `cppformat` target:
@@ -213,26 +217,3 @@ Code is generated using included [Python scripts](/scripts/README.md).
 
 Documentation is generated from source code using Sphinx -
 see [scripts dir](/scripts/README.md) for details.
-
-## Release Process
-
-Unified Runtime releases are aligned with oneAPI releases. Once all changes
-planned for a release have been accepted, the release process is defined as:
-
-1. Create a new release branch based on the [main][main-branch] branch taking
-   the form `v<major>.<minor>.x` where `x` is a placeholder for the patch
-   version. This branch will always contain the latest patch version for a given
-   release.
-2. Create a PR to increment the CMake project version on the [main][main-branch]
-   and merge before accepting any other changes.
-3. Create a new tag based on the latest commit on the release branch taking the
-   form `v<major>.<minor>.<patch>`.
-4. Create a [new GitHub release][new-github-release] using the tag created in
-   the previous step.
-   * Prior to version 1.0, check the *Set as a pre-release* tick box.
-5. Update downstream projects to utilize the release tag. If any issues arise
-   from integration, apply any necessary hot fixes to `v<major>.<minor>.x`
-   branch and go back to step 3.
-
-[main-branch]: https://github.com/oneapi-src/unified-runtime/tree/main
-[new-github-release]: https://github.com/oneapi-src/unified-runtime/releases/new

@@ -3,6 +3,10 @@
 // Exceptions. See LICENSE.TXT
 //
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+// RUN: %maybe-v1 ./mem_buffer_map-test
+// RUN: %maybe-v2 ./mem_buffer_map-test
+
 #include "../../enqueue/helpers.h"
 #include <uur/fixtures.h>
 #include <uur/known_failure.h>
@@ -11,7 +15,7 @@
 using urEnqueueMemBufferMapTestWithParamL0 =
     uur::urMemBufferQueueTestWithParam<uur::mem_buffer_test_parameters_t>;
 
-UUR_DEVICE_TEST_SUITE_P(
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
     urEnqueueMemBufferMapTestWithParamL0,
     ::testing::ValuesIn(uur::mem_buffer_test_parameters),
     uur::printMemBufferTestString<urEnqueueMemBufferMapTestWithParamL0>);

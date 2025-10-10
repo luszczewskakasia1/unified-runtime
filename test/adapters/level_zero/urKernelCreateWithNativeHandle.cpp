@@ -4,13 +4,16 @@
 //
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+// RUN: %maybe-v1 ./kernel_create-test
+// RUN: %maybe-v2 ./kernel_create-test
+
 #include "ur_api.h"
 #include "uur/checks.h"
 #include "ze_api.h"
 #include <uur/fixtures.h>
 
 using urLevelZeroKernelNativeHandleTest = uur::urQueueTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urLevelZeroKernelNativeHandleTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urLevelZeroKernelNativeHandleTest);
 
 TEST_P(urLevelZeroKernelNativeHandleTest, OwnedHandleRelease) {
   ze_context_handle_t native_context;
@@ -33,6 +36,10 @@ TEST_P(urLevelZeroKernelNativeHandleTest, OwnedHandleRelease) {
       reinterpret_cast<const uint8_t *>(il_binary->data());
   moduleDesc.pBuildFlags = "";
   ze_module_handle_t module;
+
+  // Initialize Level Zero driver is required if this test is linked statically
+  // with Level Zero loader, the driver will not be init otherwise.
+  zeInit(ZE_INIT_FLAG_GPU_ONLY);
 
   ASSERT_EQ(
       zeModuleCreate(native_context, native_device, &moduleDesc, &module, NULL),
@@ -65,8 +72,8 @@ TEST_P(urLevelZeroKernelNativeHandleTest, OwnedHandleRelease) {
   size_t local_size = 1;
   size_t global_size = 1;
   ASSERT_SUCCESS(urEnqueueKernelLaunch(queue, kernel, 1, &global_offset,
-                                       &local_size, &global_size, 0, nullptr,
-                                       nullptr));
+                                       &local_size, &global_size, 0, nullptr, 0,
+                                       nullptr, nullptr));
 
   ASSERT_SUCCESS(urKernelRelease(kernel));
   ASSERT_SUCCESS(urProgramRelease(program));

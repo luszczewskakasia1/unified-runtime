@@ -1,0 +1,55 @@
+# Checks for new commits in unified-runtime dir of intel/llvm
+# and pushes them to the unified-runtime repo. On top of new changes,
+# there's an extra commit saving intel/llvm's base commit
+name: Mirror intel/llvm commits
+
+on:
+  workflow_dispatch:
+  # Runs daily at midnight (UTC)
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: read
+
+env:
+  UR_BRANCH: main
+
+jobs:
+  mirror-commits:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout UR
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          path: unified-runtime
+          ref: ${{ env.UR_BRANCH }}
+
+      - name: Checkout intel/llvm
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          path: intel-llvm
+          repository: intel/llvm
+          fetch-depth: 0
+          ref: sycl
+
+      - name: Configure Git
+        working-directory: ${{github.workspace}}/unified-runtime
+        run: |
+          git config user.name "bb-ur"
+          git config user.email "bb-ur@intel.com"
+          git config user.password ${{ secrets.GH_BB_TOKEN }}
+
+      - name: Mirror commits
+        run: |
+          python3 unified-runtime/scripts/mirror-commits-from-intel-llvm.py unified-runtime intel-llvm
+
+      - name: Push new changes to UR repo
+        working-directory: ${{github.workspace}}/unified-runtime
+        run: |
+          git log -n 15 --oneline
+          git push origin ${{ env.UR_BRANCH }}

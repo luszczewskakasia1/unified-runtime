@@ -160,6 +160,12 @@ etors:
     desc: "[size_t] image height"
   - name: DEPTH
     desc: "[size_t] image depth"
+  - name: ARRAY_SIZE
+    desc: "[size_t] array size"
+  - name: NUM_MIP_LEVELS
+    desc: "[uint32_t] number of MIP levels"
+  - name: NUM_SAMPLES
+    desc: "[uint32_t] number of samples"
 --- #--------------------------------------------------------------------------
 type: struct
 desc: "Image format including channel layout and data type"
@@ -241,7 +247,7 @@ params:
       desc: "[in][optional] pointer to the buffer data"
     - type: $x_mem_handle_t*
       name: phMem
-      desc: "[out] pointer to handle of image object created"
+      desc: "[out][alloc] pointer to handle of image object created"
 returns:
     - $X_RESULT_ERROR_INVALID_CONTEXT
     - $X_RESULT_ERROR_INVALID_VALUE
@@ -252,6 +258,8 @@ returns:
       - "`pImageDesc && pImageDesc->numSamples != 0`"
       - "`pImageDesc && pImageDesc->rowPitch != 0 && pHost == nullptr`"
       - "`pImageDesc && pImageDesc->slicePitch != 0 && pHost == nullptr`"
+    - $X_RESULT_ERROR_UNSUPPORTED_FEATURE:
+      - "Device `$X_DEVICE_INFO_IMAGE_SUPPORT` is false"
     - $X_RESULT_ERROR_INVALID_IMAGE_SIZE
     - $X_RESULT_ERROR_INVALID_OPERATION
     - $X_RESULT_ERROR_INVALID_HOST_PTR:
@@ -331,7 +339,7 @@ params:
       desc: "[in][optional] pointer to buffer creation properties"
     - type: $x_mem_handle_t*
       name: phBuffer
-      desc: "[out] pointer to handle of the memory buffer created"
+      desc: "[out][alloc] pointer to handle of the memory buffer created"
 returns:
     - $X_RESULT_ERROR_INVALID_CONTEXT
     - $X_RESULT_ERROR_INVALID_VALUE
@@ -501,7 +509,7 @@ params:
       desc: "[in][optional] pointer to native memory creation properties."
     - type: $x_mem_handle_t*
       name: phMem
-      desc: "[out] pointer to handle of buffer memory object created."
+      desc: "[out][alloc] pointer to handle of buffer memory object created."
 returns:
     - $X_RESULT_ERROR_UNSUPPORTED_FEATURE:
         - "If the adapter has no underlying equivalent handle."
@@ -534,7 +542,7 @@ params:
       desc: "[in][optional] pointer to native memory creation properties."
     - type: $x_mem_handle_t*
       name: phMem
-      desc: "[out] pointer to handle of image memory object created."
+      desc: "[out][alloc pointer to handle of image memory object created."
 returns:
     - $X_RESULT_ERROR_UNSUPPORTED_FEATURE:
         - "If the adapter has no underlying equivalent handle."
@@ -621,6 +629,8 @@ returns:
     - $X_RESULT_ERROR_INVALID_NULL_POINTER:
         - "`propSize != 0 && pPropValue == NULL`"
         - "`pPropValue == NULL && pPropSizeRet == NULL`"
+    - $X_RESULT_ERROR_UNSUPPORTED_FEATURE:
+      - "Device `$X_DEVICE_INFO_IMAGE_SUPPORT` is false"
     - $X_RESULT_ERROR_INVALID_MEM_OBJECT
     - $X_RESULT_ERROR_OUT_OF_RESOURCES
     - $X_RESULT_ERROR_OUT_OF_HOST_MEMORY

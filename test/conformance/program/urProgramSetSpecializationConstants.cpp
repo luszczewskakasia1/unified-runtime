@@ -26,7 +26,7 @@ struct urProgramSetSpecializationConstantsTest : uur::urKernelExecutionTest {
   uint32_t default_spec_value = 1000; // Must match the one in the SYCL source
   ur_specialization_constant_info_t info = {0, sizeof(spec_value), &spec_value};
 };
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urProgramSetSpecializationConstantsTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urProgramSetSpecializationConstantsTest);
 
 struct urProgramSetSpecializationConstantsNegativeTest
     : uur::urKernelExecutionTest {
@@ -48,7 +48,7 @@ struct urProgramSetSpecializationConstantsNegativeTest
   uint32_t default_spec_value = 1000; // Must match the one in the SYCL source
   ur_specialization_constant_info_t info = {0, sizeof(spec_value), &spec_value};
 };
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(
     urProgramSetSpecializationConstantsNegativeTest);
 
 struct urProgramSetMultipleSpecializationConstantsTest
@@ -68,7 +68,7 @@ struct urProgramSetMultipleSpecializationConstantsTest
     }
   }
 };
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(
     urProgramSetMultipleSpecializationConstantsTest);
 
 TEST_P(urProgramSetSpecializationConstantsTest, Success) {
@@ -91,15 +91,8 @@ TEST_P(urProgramSetSpecializationConstantsNegativeTest, Unsupported) {
 }
 
 TEST_P(urProgramSetSpecializationConstantsTest, UseDefaultValue) {
-  ur_platform_backend_t backend;
-  ASSERT_SUCCESS(urPlatformGetInfo(platform, UR_PLATFORM_INFO_BACKEND,
-                                   sizeof(ur_platform_backend_t), &backend,
-                                   nullptr));
-  if (backend == UR_PLATFORM_BACKEND_CUDA ||
-      backend == UR_PLATFORM_BACKEND_HIP) {
-    GTEST_FAIL() << "This test is known to cause crashes on Nvidia and "
-                    "AMD; not running.";
-  }
+  // This test is known to cause crashes on Nvidia and AMD.
+  UUR_KNOWN_FAILURE_ON(uur::CUDA{}, uur::HIP{});
 
   ASSERT_SUCCESS(urProgramBuild(context, program, nullptr));
   auto entry_points =

@@ -10,7 +10,7 @@
 using urEventGetInfoTest = uur::event::urEventTest;
 
 TEST_P(urEventGetInfoTest, SuccessCommandQueue) {
-  ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_QUEUE;
+  const ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_QUEUE;
   size_t property_size = 0;
 
   ASSERT_SUCCESS_OR_OPTIONAL_QUERY(
@@ -18,15 +18,67 @@ TEST_P(urEventGetInfoTest, SuccessCommandQueue) {
       property_name);
   ASSERT_EQ(property_size, sizeof(ur_queue_handle_t));
 
-  ur_queue_handle_t returned_queue = nullptr;
+  ur_queue_handle_t property_value = nullptr;
   ASSERT_SUCCESS(urEventGetInfo(event, property_name, property_size,
-                                &returned_queue, nullptr));
+                                &property_value, nullptr));
 
-  ASSERT_EQ(queue, returned_queue);
+  ASSERT_EQ(queue, property_value);
+}
+
+TEST_P(urEventGetInfoTest, SuccessRoundtripContext) {
+  // Segfaults
+  UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
+
+  const ur_event_info_t property_name = UR_EVENT_INFO_CONTEXT;
+  size_t property_size = sizeof(ur_context_handle_t);
+
+  ur_native_handle_t native_event;
+  UUR_ASSERT_SUCCESS_OR_UNSUPPORTED(
+      urEventGetNativeHandle(event, &native_event));
+
+  ur_event_handle_t from_native_event;
+  UUR_ASSERT_SUCCESS_OR_UNSUPPORTED(urEventCreateWithNativeHandle(
+      native_event, context, nullptr, &from_native_event));
+
+  ur_context_handle_t property_value = nullptr;
+  ASSERT_SUCCESS(urEventGetInfo(from_native_event, property_name, property_size,
+                                &property_value, nullptr));
+
+  ASSERT_EQ(property_value, context);
+}
+
+TEST_P(urEventGetInfoTest, SuccessRoundtripCommandQueue) {
+  UUR_KNOWN_FAILURE_ON(uur::HIP{}, uur::CUDA{});
+  // Segfaults
+  UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
+
+  const ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_QUEUE;
+  size_t property_size = sizeof(ur_queue_handle_t);
+
+  ur_native_handle_t native_event;
+  UUR_ASSERT_SUCCESS_OR_UNSUPPORTED(
+      urEventGetNativeHandle(event, &native_event));
+
+  ur_event_handle_t from_native_event;
+  UUR_ASSERT_SUCCESS_OR_UNSUPPORTED(urEventCreateWithNativeHandle(
+      native_event, context, nullptr, &from_native_event));
+
+  ur_queue_handle_t property_value = nullptr;
+  ASSERT_SUCCESS(urEventGetInfo(from_native_event, property_name, property_size,
+                                &property_value, nullptr));
+
+  // We can't assume that the two queue handles are equal (since creating the
+  // link to the UR structures has been severed by going through native handle,
+  // so just check the underlying native pointers
+  ur_native_handle_t original_queue;
+  ur_native_handle_t new_queue;
+  ASSERT_SUCCESS(urQueueGetNativeHandle(queue, nullptr, &original_queue));
+  ASSERT_SUCCESS(urQueueGetNativeHandle(property_value, nullptr, &new_queue));
+  ASSERT_EQ(original_queue, new_queue);
 }
 
 TEST_P(urEventGetInfoTest, SuccessContext) {
-  ur_event_info_t property_name = UR_EVENT_INFO_CONTEXT;
+  const ur_event_info_t property_name = UR_EVENT_INFO_CONTEXT;
   size_t property_size = 0;
 
   ASSERT_SUCCESS_OR_OPTIONAL_QUERY(
@@ -34,17 +86,17 @@ TEST_P(urEventGetInfoTest, SuccessContext) {
       property_name);
   ASSERT_EQ(property_size, sizeof(ur_context_handle_t));
 
-  ur_context_handle_t returned_context = nullptr;
+  ur_context_handle_t property_value = nullptr;
   ASSERT_SUCCESS(urEventGetInfo(event, property_name, property_size,
-                                &returned_context, nullptr));
+                                &property_value, nullptr));
 
-  ASSERT_EQ(context, returned_context);
+  ASSERT_EQ(context, property_value);
 }
 
 TEST_P(urEventGetInfoTest, SuccessCommandType) {
   UUR_KNOWN_FAILURE_ON(uur::LevelZero{});
 
-  ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_TYPE;
+  const ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_TYPE;
   size_t property_size = 0;
 
   ASSERT_SUCCESS_OR_OPTIONAL_QUERY(
@@ -52,15 +104,15 @@ TEST_P(urEventGetInfoTest, SuccessCommandType) {
       property_name);
   ASSERT_EQ(property_size, sizeof(ur_command_t));
 
-  ur_command_t returned_command_type = UR_COMMAND_FORCE_UINT32;
+  ur_command_t property_value = UR_COMMAND_FORCE_UINT32;
   ASSERT_SUCCESS(urEventGetInfo(event, property_name, property_size,
-                                &returned_command_type, nullptr));
+                                &property_value, nullptr));
 
-  ASSERT_EQ(UR_COMMAND_MEM_BUFFER_WRITE, returned_command_type);
+  ASSERT_EQ(UR_COMMAND_MEM_BUFFER_WRITE, property_value);
 }
 
 TEST_P(urEventGetInfoTest, SuccessCommandExecutionStatus) {
-  ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_EXECUTION_STATUS;
+  const ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_EXECUTION_STATUS;
   size_t property_size = 0;
 
   ASSERT_SUCCESS_OR_OPTIONAL_QUERY(
@@ -68,15 +120,15 @@ TEST_P(urEventGetInfoTest, SuccessCommandExecutionStatus) {
       property_name);
   ASSERT_EQ(property_size, sizeof(ur_event_status_t));
 
-  ur_event_status_t returned_status = UR_EVENT_STATUS_FORCE_UINT32;
+  ur_event_status_t property_value = UR_EVENT_STATUS_FORCE_UINT32;
   ASSERT_SUCCESS(urEventGetInfo(event, property_name, property_size,
-                                &returned_status, nullptr));
+                                &property_value, nullptr));
 
-  ASSERT_EQ(UR_EVENT_STATUS_COMPLETE, returned_status);
+  ASSERT_EQ(UR_EVENT_STATUS_COMPLETE, property_value);
 }
 
 TEST_P(urEventGetInfoTest, SuccessReferenceCount) {
-  ur_event_info_t property_name = UR_EVENT_INFO_REFERENCE_COUNT;
+  const ur_event_info_t property_name = UR_EVENT_INFO_REFERENCE_COUNT;
   size_t property_size = 0;
 
   ASSERT_SUCCESS_OR_OPTIONAL_QUERY(
@@ -84,23 +136,22 @@ TEST_P(urEventGetInfoTest, SuccessReferenceCount) {
       property_name);
   ASSERT_EQ(property_size, sizeof(uint32_t));
 
-  uint32_t returned_reference_count = 0;
-  ASSERT_SUCCESS(urEventGetInfo(event, property_name, property_size,
-                                &returned_reference_count, nullptr));
+  uint32_t property_value = 0;
+  ASSERT_QUERY_RETURNS_VALUE(urEventGetInfo(event, property_name, property_size,
+                                            &property_value, nullptr),
+                             property_value);
 
-  ASSERT_GT(returned_reference_count, 0U);
+  ASSERT_GT(property_value, 0U);
 }
 
 TEST_P(urEventGetInfoTest, InvalidNullHandle) {
-  ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_QUEUE;
+  const ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_QUEUE;
   size_t property_size;
 
   ASSERT_SUCCESS(
       urEventGetInfo(event, property_name, 0, nullptr, &property_size));
   ASSERT_NE(property_size, 0);
-  std::vector<uint8_t> data(property_size);
 
-  /* Invalid hEvent */
   ASSERT_EQ_RESULT(urEventGetInfo(nullptr, UR_EVENT_INFO_COMMAND_QUEUE, 0,
                                   nullptr, &property_size),
                    UR_RESULT_ERROR_INVALID_NULL_HANDLE);
@@ -115,7 +166,7 @@ TEST_P(urEventGetInfoTest, InvalidEnumeration) {
 }
 
 TEST_P(urEventGetInfoTest, InvalidSizePropSize) {
-  ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_QUEUE;
+  const ur_event_info_t property_name = UR_EVENT_INFO_COMMAND_QUEUE;
   size_t property_size = 0;
 
   ASSERT_SUCCESS(
@@ -123,7 +174,6 @@ TEST_P(urEventGetInfoTest, InvalidSizePropSize) {
   ASSERT_NE(property_size, 0);
   std::vector<uint8_t> data(property_size);
 
-  /* Invalid propSize */
   ASSERT_EQ_RESULT(urEventGetInfo(event, UR_EVENT_INFO_COMMAND_QUEUE, 0,
                                   data.data(), nullptr),
                    UR_RESULT_ERROR_INVALID_SIZE);
@@ -149,4 +199,4 @@ TEST_P(urEventGetInfoTest, InvalidNullPointerPropSizeRet) {
       UR_RESULT_ERROR_INVALID_NULL_POINTER);
 }
 
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urEventGetInfoTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urEventGetInfoTest);

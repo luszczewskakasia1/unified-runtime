@@ -86,31 +86,35 @@ static std::vector<testParametersFill> test_cases{
     {256, 256},
     /* pattern_size < size */
     {1024, 256},
+    /* sizes which are not powers of 2 */
+    {1000, 10},
     /* pattern sizes corresponding to some common scalar and vector types */
     {256, 4},
     {256, 8},
     {256, 16},
     {256, 32}};
 
-UUR_DEVICE_TEST_SUITE_P(urEnqueueUSMFillTestWithParam,
-                        testing::ValuesIn(test_cases),
-                        printFillTestString<urEnqueueUSMFillTestWithParam>);
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
+    urEnqueueUSMFillTestWithParam, testing::ValuesIn(test_cases),
+    printFillTestString<urEnqueueUSMFillTestWithParam>);
 
 TEST_P(urEnqueueUSMFillTestWithParam, Success) {
+  // https://github.com/intel/llvm/issues/19604
+  UUR_KNOWN_FAILURE_ON(uur::LevelZeroV2{});
   UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
 
   ur_event_handle_t event = nullptr;
 
   ASSERT_SUCCESS(urEnqueueUSMFill(queue, ptr, pattern_size, pattern.data(),
                                   size, 0, nullptr, &event));
-  EXPECT_SUCCESS(urQueueFlush(queue));
+  ASSERT_SUCCESS(urQueueFlush(queue));
 
   ASSERT_SUCCESS(urEventWait(1, &event));
   ur_event_status_t event_status;
   ASSERT_SUCCESS(uur::GetEventInfo<ur_event_status_t>(
       event, UR_EVENT_INFO_COMMAND_EXECUTION_STATUS, event_status));
   ASSERT_EQ(event_status, UR_EVENT_STATUS_COMPLETE);
-  EXPECT_SUCCESS(urEventRelease(event));
+  ASSERT_SUCCESS(urEventRelease(event));
 
   ASSERT_NO_FATAL_FAILURE(verifyData());
 }
@@ -145,7 +149,7 @@ struct urEnqueueUSMFillNegativeTest : uur::urQueueTest {
   void *ptr{nullptr};
 };
 
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urEnqueueUSMFillNegativeTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urEnqueueUSMFillNegativeTest);
 
 TEST_P(urEnqueueUSMFillNegativeTest, InvalidNullQueueHandle) {
   ASSERT_EQ_RESULT(urEnqueueUSMFill(nullptr, ptr, pattern_size, pattern.data(),
@@ -153,10 +157,13 @@ TEST_P(urEnqueueUSMFillNegativeTest, InvalidNullQueueHandle) {
                    UR_RESULT_ERROR_INVALID_NULL_HANDLE);
 }
 
-TEST_P(urEnqueueUSMFillNegativeTest, InvalidNullPtr) {
-
+TEST_P(urEnqueueUSMFillNegativeTest, InvalidNullPointer) {
   ASSERT_EQ_RESULT(urEnqueueUSMFill(queue, nullptr, pattern_size,
                                     pattern.data(), size, 0, nullptr, nullptr),
+                   UR_RESULT_ERROR_INVALID_NULL_POINTER);
+
+  ASSERT_EQ_RESULT(urEnqueueUSMFill(queue, ptr, pattern_size, nullptr, size, 0,
+                                    nullptr, nullptr),
                    UR_RESULT_ERROR_INVALID_NULL_POINTER);
 }
 
@@ -170,6 +177,11 @@ TEST_P(urEnqueueUSMFillNegativeTest, InvalidSize) {
   ASSERT_EQ_RESULT(urEnqueueUSMFill(queue, ptr, pattern_size, pattern.data(), 7,
                                     0, nullptr, nullptr),
                    UR_RESULT_ERROR_INVALID_SIZE);
+
+  /* size does not exceed allocation size of ptr */
+  ASSERT_EQ_RESULT(urEnqueueUSMFill(queue, ptr, pattern_size, pattern.data(),
+                                    size + 1, 0, nullptr, nullptr),
+                   UR_RESULT_ERROR_INVALID_SIZE);
 }
 
 TEST_P(urEnqueueUSMFillNegativeTest, OutOfBounds) {
@@ -179,7 +191,7 @@ TEST_P(urEnqueueUSMFillNegativeTest, OutOfBounds) {
                    UR_RESULT_ERROR_INVALID_SIZE);
 }
 
-TEST_P(urEnqueueUSMFillNegativeTest, invalidPatternSize) {
+TEST_P(urEnqueueUSMFillNegativeTest, InvalidPatternSize) {
   /* pattern_size is 0 */
   ASSERT_EQ_RESULT(urEnqueueUSMFill(queue, ptr, 0, pattern.data(), size, 0,
                                     nullptr, nullptr),

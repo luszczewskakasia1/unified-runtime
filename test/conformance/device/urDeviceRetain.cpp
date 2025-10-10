@@ -7,7 +7,7 @@
 #include <uur/fixtures.h>
 
 using urDeviceRetainTest = uur::urDeviceTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urDeviceRetainTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urDeviceRetainTest);
 
 TEST_P(urDeviceRetainTest, Success) {
   uint32_t prevRefCount = 0;
@@ -51,8 +51,8 @@ TEST_P(urDeviceRetainTest, SuccessSubdevices) {
 
   ASSERT_LT(prevRefCount, refCount);
 
-  EXPECT_SUCCESS(urDeviceRelease(sub_device));
-  EXPECT_SUCCESS(urDeviceRelease(sub_device));
+  ASSERT_SUCCESS(urDeviceRelease(sub_device));
+  ASSERT_SUCCESS(urDeviceRelease(sub_device));
 }
 
 TEST_P(urDeviceRetainTest, InvalidNullHandle) {

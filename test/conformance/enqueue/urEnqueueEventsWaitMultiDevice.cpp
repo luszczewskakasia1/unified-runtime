@@ -20,6 +20,7 @@ void checkDevicesSupportSharedUSM(
         uur::GetDeviceUSMSingleSharedSupport(device, shared_usm_single));
     if (!shared_usm_single) {
       GTEST_SKIP() << "Shared USM is not supported by the device.";
+      return;
     }
   }
 }
@@ -28,10 +29,12 @@ struct urEnqueueEventsWaitMultiDeviceTest
     : uur::urMultiQueueMultiDeviceTest<2> {
   void SetUp() override {
     UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
+    // https://github.com/intel/llvm/issues/19607
+    UUR_KNOWN_FAILURE_ON(uur::LevelZeroV2{});
 
     UUR_RETURN_ON_FATAL_FAILURE(uur::urMultiQueueMultiDeviceTest<2>::SetUp());
 
-    checkDevicesSupportSharedUSM(devices);
+    UUR_RETURN_ON_FATAL_FAILURE(checkDevicesSupportSharedUSM(devices));
 
     ptrs.resize(devices.size());
     for (size_t i = 0; i < devices.size(); i++) {
@@ -68,7 +71,7 @@ struct urEnqueueEventsWaitMultiDeviceTest
 
   std::vector<void *> ptrs;
 };
-UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P(urEnqueueEventsWaitMultiDeviceTest);
+UUR_INSTANTIATE_PLATFORM_TEST_SUITE(urEnqueueEventsWaitMultiDeviceTest);
 
 TEST_P(urEnqueueEventsWaitMultiDeviceTest, EmptyWaitList) {
   initData();
@@ -124,12 +127,15 @@ struct urEnqueueEventsWaitMultiDeviceMTTest
   }
 
   void SetUp() override {
+    // https://github.com/intel/llvm/issues/19607
+    UUR_KNOWN_FAILURE_ON(uur::LevelZeroV2{});
+
     UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::NativeCPU{});
 
     UUR_RETURN_ON_FATAL_FAILURE(
         uur::urMultiQueueMultiDeviceTestWithParam<8,
                                                   uur::BoolTestParam>::SetUp());
-    checkDevicesSupportSharedUSM(devices);
+    UUR_RETURN_ON_FATAL_FAILURE(checkDevicesSupportSharedUSM(devices));
 
     ptrs.resize(devices.size());
     for (size_t i = 0; i < devices.size(); i++) {
@@ -167,7 +173,7 @@ struct urEnqueueEventsWaitMultiDeviceMTTest
   std::vector<void *> ptrs;
 };
 
-UUR_PLATFORM_TEST_SUITE_P(
+UUR_PLATFORM_TEST_SUITE_WITH_PARAM(
     urEnqueueEventsWaitMultiDeviceMTTest,
     testing::ValuesIn(uur::BoolTestParam::makeBoolParam("MultiThread")),
     uur::platformTestWithParamPrinter<uur::BoolTestParam>);
@@ -194,13 +200,6 @@ TEST_P(urEnqueueEventsWaitMultiDeviceMTTest, EnqueueWaitSingleQueueMultiOps) {
 }
 
 TEST_P(urEnqueueEventsWaitMultiDeviceMTTest, EnqueueWaitOnAllQueues) {
-  // Fails when -fsanitize=cfi
-#ifdef UR_USE_CFI
-  if (getParam().value) {
-    UUR_KNOWN_FAILURE_ON(uur::OpenCL{});
-  }
-#endif
-
   std::vector<uur::raii::Event> eventsRaii(devices.size());
   std::vector<ur_event_handle_t> events(devices.size());
   auto work = [this, &events, &eventsRaii](size_t i) {

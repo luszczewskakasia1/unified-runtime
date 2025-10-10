@@ -56,7 +56,7 @@ struct QueueUSMTestWithParam : uur::IntegrationQueueTestWithParam {
   void *DeviceMem2 = nullptr;
 };
 
-UUR_DEVICE_TEST_SUITE_P(
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(
     QueueUSMTestWithParam,
     testing::Values(0, /* In-Order */
                     UR_QUEUE_FLAG_OUT_OF_ORDER_EXEC_MODE_ENABLE),
@@ -100,7 +100,7 @@ TEST_P(QueueUSMTestWithParam, QueueUSMTest) {
 
     ASSERT_SUCCESS(urEnqueueKernelLaunch(Queue, kernel, NDimensions,
                                          &GlobalOffset, &ArraySize, nullptr, 0,
-                                         nullptr, &Event));
+                                         nullptr, 0, nullptr, &Event));
     ASSERT_NO_FATAL_FAILURE(submitBarrierIfNeeded(Event));
 
     CurValueMem2 = CurValueMem1 * 2;
@@ -111,7 +111,7 @@ TEST_P(QueueUSMTestWithParam, QueueUSMTest) {
 
     ASSERT_SUCCESS(urEnqueueKernelLaunch(Queue, kernel, NDimensions,
                                          &GlobalOffset, &ArraySize, nullptr, 0,
-                                         nullptr, &Event));
+                                         nullptr, 0, nullptr, &Event));
     ASSERT_NO_FATAL_FAILURE(submitBarrierIfNeeded(Event));
 
     CurValueMem1 = CurValueMem2 * 2;

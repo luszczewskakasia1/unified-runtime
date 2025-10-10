@@ -13,21 +13,33 @@
 
 #pragma once
 
-#include "asan_allocator.hpp"
+#include "sanitizer_common/sanitizer_common.hpp"
 #include "sanitizer_common/sanitizer_libdevice.hpp"
-
-#include <unordered_set>
+#include "ur_sanitizer_layer.hpp"
 
 namespace ur_sanitizer_layer {
 namespace asan {
 
 struct ShadowMemory {
-  ShadowMemory(ur_context_handle_t Context, ur_device_handle_t Device)
-      : Context(Context), Device(Device) {
-    urDeviceRetain(Device);
+  ShadowMemory(ur_device_handle_t Device) : Device(Device) {
+    [[maybe_unused]] ur_result_t URes =
+        getContext()->urDdiTable.Device.pfnRetain(Device);
+    assert(URes == UR_RESULT_SUCCESS);
+
+    // Create the internal context used for managing the shadow memory
+    URes = getContext()->urDdiTable.Context.pfnCreate(1, &Device, nullptr,
+                                                      &Context);
+    assert(URes == UR_RESULT_SUCCESS);
   }
 
-  virtual ~ShadowMemory() { urDeviceRelease(Device); }
+  virtual ~ShadowMemory() {
+    [[maybe_unused]] ur_result_t URes =
+        getContext()->urDdiTable.Context.pfnRelease(Context);
+    assert(URes == UR_RESULT_SUCCESS);
+
+    URes = getContext()->urDdiTable.Device.pfnRelease(Device);
+    assert(URes == UR_RESULT_SUCCESS);
+  }
 
   virtual ur_result_t Setup() = 0;
 
@@ -44,8 +56,8 @@ struct ShadowMemory {
                                        uptr &Begin, uptr &End) = 0;
 
   virtual ur_result_t AllocPrivateShadow(ur_queue_handle_t Queue,
-                                         uint32_t NumWG, uptr &Begin,
-                                         uptr &End) = 0;
+                                         uint32_t NumSG, uptr *&Base,
+                                         uptr &Begin, uptr &End) = 0;
 
   ur_context_handle_t Context{};
 
@@ -57,8 +69,7 @@ struct ShadowMemory {
 };
 
 struct ShadowMemoryCPU final : public ShadowMemory {
-  ShadowMemoryCPU(ur_context_handle_t Context, ur_device_handle_t Device)
-      : ShadowMemory(Context, Device) {}
+  ShadowMemoryCPU(ur_device_handle_t Device) : ShadowMemory(Device) {}
 
   ur_result_t Setup() override;
 
@@ -78,8 +89,8 @@ struct ShadowMemoryCPU final : public ShadowMemory {
     return UR_RESULT_SUCCESS;
   }
 
-  ur_result_t AllocPrivateShadow(ur_queue_handle_t, uint32_t, uptr &Begin,
-                                 uptr &End) override {
+  ur_result_t AllocPrivateShadow(ur_queue_handle_t, uint32_t, uptr *&,
+                                 uptr &Begin, uptr &End) override {
     Begin = ShadowBegin;
     End = ShadowEnd;
     return UR_RESULT_SUCCESS;
@@ -87,8 +98,7 @@ struct ShadowMemoryCPU final : public ShadowMemory {
 };
 
 struct ShadowMemoryGPU : public ShadowMemory {
-  ShadowMemoryGPU(ur_context_handle_t Context, ur_device_handle_t Device)
-      : ShadowMemory(Context, Device) {}
+  ShadowMemoryGPU(ur_device_handle_t Device) : ShadowMemory(Device) {}
 
   ur_result_t Setup() override;
 
@@ -99,8 +109,9 @@ struct ShadowMemoryGPU : public ShadowMemory {
   ur_result_t AllocLocalShadow(ur_queue_handle_t Queue, uint32_t NumWG,
                                uptr &Begin, uptr &End) override final;
 
-  ur_result_t AllocPrivateShadow(ur_queue_handle_t Queue, uint32_t NumWG,
-                                 uptr &Begin, uptr &End) override final;
+  ur_result_t AllocPrivateShadow(ur_queue_handle_t Queue, uint32_t NumSG,
+                                 uptr *&Base, uptr &Begin,
+                                 uptr &End) override final;
 
   ur_mutex VirtualMemMapsMutex;
 
@@ -109,6 +120,7 @@ struct ShadowMemoryGPU : public ShadowMemory {
   uptr LocalShadowOffset = 0;
 
   uptr PrivateShadowOffset = 0;
+  uptr PrivateBasePtr = 0;
 };
 
 /// Shadow Memory layout of GPU PVC device
@@ -129,8 +141,7 @@ struct ShadowMemoryGPU : public ShadowMemory {
 ///   Device USM      : 0x0800_0000_0000 ~ 0x17ff_ffff_ffff
 ///
 struct ShadowMemoryPVC final : public ShadowMemoryGPU {
-  ShadowMemoryPVC(ur_context_handle_t Context, ur_device_handle_t Device)
-      : ShadowMemoryGPU(Context, Device) {}
+  ShadowMemoryPVC(ur_device_handle_t Device) : ShadowMemoryGPU(Device) {}
 
   uptr MemToShadow(uptr Ptr) override;
 
@@ -148,17 +159,15 @@ struct ShadowMemoryPVC final : public ShadowMemoryGPU {
 ///   Device      USM : 0x0800_0000_0000 ~ 0x0fff_ffff_ffff
 ///
 struct ShadowMemoryDG2 final : public ShadowMemoryGPU {
-  ShadowMemoryDG2(ur_context_handle_t Context, ur_device_handle_t Device)
-      : ShadowMemoryGPU(Context, Device) {}
+  ShadowMemoryDG2(ur_device_handle_t Device) : ShadowMemoryGPU(Device) {}
 
   uptr MemToShadow(uptr Ptr) override;
 
   size_t GetShadowSize() override { return 0x100000000000ULL; }
 };
 
-std::shared_ptr<ShadowMemory> GetShadowMemory(ur_context_handle_t Context,
-                                              ur_device_handle_t Device,
-                                              DeviceType Type);
+std::shared_ptr<ShadowMemory> CreateShadowMemory(ur_device_handle_t Device,
+                                                 DeviceType Type);
 
 } // namespace asan
 } // namespace ur_sanitizer_layer

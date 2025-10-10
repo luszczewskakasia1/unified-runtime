@@ -11,55 +11,13 @@
 #include "uur/utils.h"
 #include <string>
 #include <string_view>
-#include <tuple>
 #include <vector>
 
 namespace uur {
-struct Matcher {
-  Matcher(uint32_t adapterVersion, ur_adapter_backend_t backend,
-          std::vector<std::string> deviceNames)
-      : adapterVersion(adapterVersion), backend(backend),
-        names(std::move(deviceNames)) {}
-
-  uint32_t adapterVersion;
-  ur_adapter_backend_t backend;
-  std::vector<std::string> names;
-};
-
-struct OpenCL : Matcher {
-  OpenCL(std::initializer_list<std::string> il)
-      : Matcher(1, UR_ADAPTER_BACKEND_OPENCL, {il.begin(), il.end()}) {}
-};
-
-struct LevelZero : Matcher {
-  LevelZero(std::initializer_list<std::string> il)
-      : Matcher(1, UR_ADAPTER_BACKEND_LEVEL_ZERO, {il.begin(), il.end()}) {}
-};
-
-struct LevelZeroV2 : Matcher {
-  LevelZeroV2(std::initializer_list<std::string> il)
-      : Matcher(2, UR_ADAPTER_BACKEND_LEVEL_ZERO, {il.begin(), il.end()}) {}
-};
-
-struct CUDA : Matcher {
-  CUDA(std::initializer_list<std::string> il)
-      : Matcher(1, UR_ADAPTER_BACKEND_CUDA, {il.begin(), il.end()}) {}
-};
-
-struct HIP : Matcher {
-  HIP(std::initializer_list<std::string> il)
-      : Matcher(1, UR_ADAPTER_BACKEND_HIP, {il.begin(), il.end()}) {}
-};
-
-struct NativeCPU : Matcher {
-  NativeCPU(std::initializer_list<std::string> il)
-      : Matcher(1, UR_ADAPTER_BACKEND_NATIVE_CPU, {il.begin(), il.end()}) {}
-};
-
 namespace detail {
 struct AdapterInfo {
   uint32_t version;
-  ur_adapter_backend_t backend;
+  ur_backend_t backend;
 };
 
 inline AdapterInfo getAdapterInfo(ur_adapter_handle_t adapter) {
@@ -72,10 +30,75 @@ inline AdapterInfo getAdapterInfo(ur_adapter_handle_t adapter) {
 }
 } // namespace detail
 
+struct Matcher {
+  Matcher(uint32_t adapterVersion, ur_backend_t backend,
+          std::vector<std::string> checkNames)
+      : adapterVersion(adapterVersion), backend(backend),
+        names(std::move(checkNames)) {}
+
+  bool matches(const detail::AdapterInfo &adapterInfo,
+               const std::string &name) const {
+    if (backend != adapterInfo.backend) {
+      return false;
+    }
+    if (adapterVersion != adapterInfo.version) {
+      return false;
+    }
+    if (names.empty()) {
+      return true;
+    }
+    for (const auto &matcherName : names) {
+      if (name.find(matcherName) != std::string::npos) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  uint32_t adapterVersion;
+  ur_backend_t backend;
+  std::vector<std::string> names;
+};
+
+struct OpenCL : Matcher {
+  OpenCL(std::initializer_list<std::string> il)
+      : Matcher(1, UR_BACKEND_OPENCL, {il.begin(), il.end()}) {}
+};
+
+struct LevelZero : Matcher {
+  LevelZero(std::initializer_list<std::string> il)
+      : Matcher(1, UR_BACKEND_LEVEL_ZERO, {il.begin(), il.end()}) {}
+};
+
+struct LevelZeroV2 : Matcher {
+  LevelZeroV2(std::initializer_list<std::string> il)
+      : Matcher(2, UR_BACKEND_LEVEL_ZERO, {il.begin(), il.end()}) {}
+};
+
+struct CUDA : Matcher {
+  CUDA(std::initializer_list<std::string> il)
+      : Matcher(1, UR_BACKEND_CUDA, {il.begin(), il.end()}) {}
+};
+
+struct HIP : Matcher {
+  HIP(std::initializer_list<std::string> il)
+      : Matcher(1, UR_BACKEND_HIP, {il.begin(), il.end()}) {}
+};
+
+struct NativeCPU : Matcher {
+  NativeCPU(std::initializer_list<std::string> il)
+      : Matcher(1, UR_BACKEND_NATIVE_CPU, {il.begin(), il.end()}) {}
+};
+
+struct Offload : Matcher {
+  Offload(std::initializer_list<std::string> il)
+      : Matcher(1, UR_BACKEND_OFFLOAD, {il.begin(), il.end()}) {}
+};
+
 inline bool isKnownFailureOn(ur_adapter_handle_t adapter,
                              const std::vector<Matcher> &matchers) {
+  auto adapterInfo = detail::getAdapterInfo(adapter);
   for (const auto &matcher : matchers) {
-    auto adapterInfo = detail::getAdapterInfo(adapter);
     if (matcher.adapterVersion == adapterInfo.version &&
         matcher.backend == adapterInfo.backend) {
       return true;
@@ -89,21 +112,12 @@ inline bool isKnownFailureOn(ur_platform_handle_t platform,
   ur_adapter_handle_t adapter = nullptr;
   urPlatformGetInfo(platform, UR_PLATFORM_INFO_ADAPTER,
                     sizeof(ur_adapter_handle_t), &adapter, nullptr);
+  auto adapterInfo = detail::getAdapterInfo(adapter);
+  std::string name;
+  uur::GetPlatformInfo<std::string>(platform, UR_PLATFORM_INFO_NAME, name);
   for (const auto &matcher : matchers) {
-    auto adapterInfo = detail::getAdapterInfo(adapter);
-    if (matcher.adapterVersion != adapterInfo.version &&
-        matcher.backend != adapterInfo.backend) {
-      continue;
-    }
-    if (matcher.names.empty()) {
+    if (matcher.matches(adapterInfo, name)) {
       return true;
-    }
-    std::string name;
-    uur::GetPlatformInfo<std::string>(platform, UR_PLATFORM_INFO_NAME, name);
-    for (const auto &matcherName : matcher.names) {
-      if (name.find(matcherName) != std::string::npos) {
-        return true;
-      }
     }
   }
   return false;
@@ -119,23 +133,30 @@ isKnownFailureOn(const std::tuple<ur_platform_handle_t, Param> &param,
 
 inline bool isKnownFailureOn(const DeviceTuple &param,
                              const std::vector<Matcher> &matchers) {
+  auto adapterInfo = detail::getAdapterInfo(param.adapter);
+  std::string name;
+  uur::GetDeviceInfo<std::string>(param.device, UR_DEVICE_INFO_NAME, name);
   for (const auto &matcher : matchers) {
-    auto adapterInfo = detail::getAdapterInfo(param.adapter);
-    if (matcher.backend != adapterInfo.backend) {
-      continue;
-    }
-    if (matcher.adapterVersion != adapterInfo.version) {
-      continue;
-    }
-    if (matcher.names.empty()) {
+    if (matcher.matches(adapterInfo, name)) {
       return true;
     }
-    std::string name;
-    uur::GetDeviceInfo<std::string>(param.device, UR_DEVICE_INFO_NAME, name);
-    for (const auto &matcherName : matcher.names) {
-      if (name.find(matcherName) != std::string::npos) {
-        return true;
-      }
+  }
+  return false;
+}
+
+inline bool
+isKnownFailureOn(std::tuple<ur_platform_handle_t, ur_device_handle_t> param,
+                 const std::vector<Matcher> &matchers) {
+  ur_adapter_handle_t adapter = nullptr;
+  uur::GetPlatformInfo<ur_adapter_handle_t>(std::get<0>(param),
+                                            UR_PLATFORM_INFO_ADAPTER, adapter);
+  auto adapterInfo = detail::getAdapterInfo(adapter);
+  std::string name;
+  uur::GetDeviceInfo<std::string>(std::get<1>(param), UR_DEVICE_INFO_NAME,
+                                  name);
+  for (const auto &matcher : matchers) {
+    if (matcher.matches(adapterInfo, name)) {
+      return true;
     }
   }
   return false;
@@ -198,9 +219,9 @@ inline bool alsoRunKnownFailures() {
 }
 } // namespace uur
 
-#define UUR_KNOWN_FAILURE_ON(...)                                              \
-  if (uur::isKnownFailureOn(this->GetParam(), {__VA_ARGS__})) {                \
-    auto message = uur::knownFailureMessage(this->GetParam());                 \
+#define UUR_KNOWN_FAILURE_ON_PARAM(param, ...)                                 \
+  if (uur::isKnownFailureOn(param, {__VA_ARGS__})) {                           \
+    auto message = uur::knownFailureMessage(param);                            \
     if (uur::alsoRunKnownFailures()) {                                         \
       std::cerr << message << "\n";                                            \
     } else {                                                                   \
@@ -208,5 +229,8 @@ inline bool alsoRunKnownFailures() {
     }                                                                          \
   }                                                                            \
   (void)0
+
+#define UUR_KNOWN_FAILURE_ON(...)                                              \
+  UUR_KNOWN_FAILURE_ON_PARAM(this->GetParam(), __VA_ARGS__)
 
 #endif // UR_CONFORMANCE_INCLUDE_KNOWN_FAILURE_H_INCLUDED

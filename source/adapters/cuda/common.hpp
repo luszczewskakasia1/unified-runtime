@@ -10,7 +10,13 @@
 #pragma once
 
 #include <cuda.h>
+#include <nvml.h>
 #include <ur/ur.hpp>
+
+#include <umf/base.h>
+#include <umf/memory_pool.h>
+#include <umf/memory_provider.h>
+#include <umf/providers/provider_cuda.h>
 
 ur_result_t mapErrorUR(CUresult Result);
 
@@ -24,6 +30,9 @@ ur_result_t mapErrorUR(CUresult Result);
 void checkErrorUR(CUresult Result, const char *Function, int Line,
                   const char *File);
 
+void checkErrorUR(nvmlReturn_t Result, const char *Function, int Line,
+                  const char *File);
+
 void checkErrorUR(ur_result_t Result, const char *Function, int Line,
                   const char *File);
 
@@ -33,29 +42,24 @@ void checkErrorUR(ur_result_t Result, const char *Function, int Line,
 std::string getCudaVersionString();
 
 constexpr size_t MaxMessageSize = 256;
-extern thread_local ur_result_t ErrorMessageCode;
+extern thread_local int32_t ErrorMessageCode;
 extern thread_local char ErrorMessage[MaxMessageSize];
 
 // Utility function for setting a message and warning
-[[maybe_unused]] void setErrorMessage(const char *pMessage,
-                                      ur_result_t ErrorCode);
+[[maybe_unused]] void setErrorMessage(const char *pMessage, int32_t ErrorCode);
 
 void setPluginSpecificMessage(CUresult cu_res);
 
-/// ------ Error handling, matching OpenCL plugin semantics.
-namespace detail {
-namespace ur {
+namespace umf {
+ur_result_t CreateProviderPool(int cuDevice, void *cuContext,
+                               umf_usm_memory_type_t type,
+                               umf_memory_provider_handle_t *provider,
+                               umf_memory_pool_handle_t *pool);
+} // namespace umf
 
-// Report error and no return (keeps compiler from printing warnings).
-// TODO: Probably change that to throw a catchable exception,
-//       but for now it is useful to see every failure.
-//
-[[noreturn]] void die(const char *Message);
-
-// Reports error messages
-void cuPrint(const char *Message);
-
-void assertion(bool Condition, const char *Message = nullptr);
-
-} // namespace ur
-} // namespace detail
+namespace ur::cuda {
+struct ddi_getter {
+  const static ur_dditable_t *value();
+};
+using handle_base = ur::handle_base<ddi_getter>;
+} // namespace ur::cuda

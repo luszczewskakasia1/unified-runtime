@@ -9,6 +9,7 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 #include "common.hpp"
+#include "threadpool.hpp"
 #include "ur_api.h"
 #include <cstdint>
 #include <future>
@@ -21,7 +22,9 @@ struct ur_event_handle_t_ : RefCounted {
 
   ~ur_event_handle_t_();
 
-  void set_callback(const std::function<void()> &cb) { callback = cb; }
+  template <typename T> auto set_callback(T &&cb) {
+    callback = std::packaged_task<void()>(std::forward<T>(cb));
+  }
 
   void wait();
 
@@ -40,9 +43,9 @@ struct ur_event_handle_t_ : RefCounted {
 
   ur_command_t getCommandType() const { return command_type; }
 
-  void set_futures(std::vector<std::future<void>> &fs) {
+  void set_tasksinfo(native_cpu::tasksinfo_t &&fs) {
     std::lock_guard<std::mutex> lock(mutex);
-    futures = std::move(fs);
+    tasksinfo = std::move(fs);
   }
 
   void tick_start();
@@ -59,8 +62,8 @@ private:
   ur_command_t command_type;
   bool done;
   std::mutex mutex;
-  std::vector<std::future<void>> futures;
-  std::function<void()> callback;
+  native_cpu::tasksinfo_t tasksinfo;
+  std::packaged_task<void()> callback;
   uint64_t timestamp_start = 0;
   uint64_t timestamp_end = 0;
 };

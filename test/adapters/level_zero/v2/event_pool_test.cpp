@@ -4,6 +4,13 @@
 //
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+// RUN: %with-v2 ./event_pool-test
+// REQUIRES: v2
+
+// Level Zero V2 Event Pool tests are disabled when using CFI sanitizer
+// See https://github.com/oneapi-src/unified-runtime/issues/2324
+// UNSUPPORTED: has-cfi-sanitizer
+
 #include "command_list_cache.hpp"
 
 #include "level_zero/common.hpp"
@@ -16,6 +23,7 @@
 #include "event_provider.hpp"
 #include "event_provider_counter.hpp"
 #include "event_provider_normal.hpp"
+#include "queue_handle.hpp"
 #include "uur/fixtures.h"
 #include "ze_api.h"
 
@@ -27,6 +35,12 @@
 using namespace v2;
 
 static constexpr size_t MAX_DEVICES = 10;
+
+const ur_dditable_t *ur::level_zero::ddi_getter::value() {
+  // Return a blank dditable
+  static ur_dditable_t table{};
+  return &table;
+};
 
 // mock necessary functions from context, we can't pull in entire context
 // implementation due to a lot of other dependencies
@@ -108,6 +122,10 @@ struct EventPoolTest : public uur::urQueueTestWithParam<ProviderParams> {
 
     auto params = getParam();
 
+    // Initialize Level Zero driver is required if this test is linked
+    // statically with Level Zero loader, the driver will not be init otherwise.
+    zeInit(ZE_INIT_FLAG_GPU_ONLY);
+
     mockVec.push_back(device);
 
     cache = std::unique_ptr<event_pool_cache>(new event_pool_cache(
@@ -146,8 +164,8 @@ static ProviderParams test_cases[] = {
     //{TEST_PROVIDER_COUNTER, EVENT_COUNTER, QUEUE_IMMEDIATE},
 };
 
-UUR_DEVICE_TEST_SUITE_P(EventPoolTest, testing::ValuesIn(test_cases),
-                        printParams<EventPoolTest>);
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(EventPoolTest, testing::ValuesIn(test_cases),
+                                 printParams<EventPoolTest>);
 
 TEST_P(EventPoolTest, InvalidDevice) {
   auto pool = cache->borrow(MAX_DEVICES, getParam().flags);
@@ -164,7 +182,8 @@ TEST_P(EventPoolTest, Basic) {
       auto pool = cache->borrow(device->Id.value(), getParam().flags);
 
       first = pool->allocate();
-      first->resetQueueAndCommand(queue, UR_COMMAND_KERNEL_LAUNCH);
+      first->setQueue(nullptr);
+      first->setCommandType(UR_COMMAND_KERNEL_LAUNCH);
       zeFirst = first->getZeEvent();
 
       urEventRelease(first);
@@ -175,7 +194,8 @@ TEST_P(EventPoolTest, Basic) {
       auto pool = cache->borrow(device->Id.value(), getParam().flags);
 
       second = pool->allocate();
-      first->resetQueueAndCommand(queue, UR_COMMAND_KERNEL_LAUNCH);
+      second->setQueue(nullptr);
+      second->setCommandType(UR_COMMAND_KERNEL_LAUNCH);
       zeSecond = second->getZeEvent();
 
       urEventRelease(second);
@@ -195,7 +215,8 @@ TEST_P(EventPoolTest, Threaded) {
         std::vector<ur_event_handle_t> events;
         for (int i = 0; i < 100; ++i) {
           events.push_back(pool->allocate());
-          events.back()->resetQueueAndCommand(queue, UR_COMMAND_KERNEL_LAUNCH);
+          events.back()->setQueue(nullptr);
+          events.back()->setCommandType(UR_COMMAND_KERNEL_LAUNCH);
         }
         for (int i = 0; i < 100; ++i) {
           urEventRelease(events[i]);
@@ -214,7 +235,8 @@ TEST_P(EventPoolTest, ProviderNormalUseMostFreePool) {
   std::list<ur_event_handle_t> events;
   for (int i = 0; i < 128; ++i) {
     auto event = pool->allocate();
-    event->resetQueueAndCommand(queue, UR_COMMAND_KERNEL_LAUNCH);
+    event->setQueue(nullptr);
+    event->setCommandType(UR_COMMAND_KERNEL_LAUNCH);
     events.push_back(event);
   }
   auto frontZeHandle = events.front()->getZeEvent();
@@ -224,7 +246,8 @@ TEST_P(EventPoolTest, ProviderNormalUseMostFreePool) {
   }
   for (int i = 0; i < 8; ++i) {
     auto e = pool->allocate();
-    e->resetQueueAndCommand(queue, UR_COMMAND_KERNEL_LAUNCH);
+    e->setQueue(nullptr);
+    e->setCommandType(UR_COMMAND_KERNEL_LAUNCH);
     events.push_back(e);
   }
 
@@ -238,8 +261,9 @@ TEST_P(EventPoolTest, ProviderNormalUseMostFreePool) {
 
 using EventPoolTestWithQueue = uur::urQueueTestWithParam<ProviderParams>;
 
-UUR_DEVICE_TEST_SUITE_P(EventPoolTestWithQueue, testing::ValuesIn(test_cases),
-                        printParams<EventPoolTest>);
+UUR_DEVICE_TEST_SUITE_WITH_PARAM(EventPoolTestWithQueue,
+                                 testing::ValuesIn(test_cases),
+                                 printParams<EventPoolTest>);
 
 // TODO: actual min version is unknown, retest after drivers on CI are
 // updated.
@@ -265,39 +289,18 @@ TEST_P(EventPoolTestWithQueue, WithTimestamp) {
                                 &hDevice, nullptr));
 
   ur_event_handle_t first;
-  ze_event_handle_t zeFirst;
   {
     ASSERT_SUCCESS(
         urEnqueueTimestampRecordingExp(queue, false, 1, &hEvent, &first));
-    zeFirst = first->getZeEvent();
-
     urEventRelease(first); // should not actually release the event until
                            // recording is completed
   }
   ur_event_handle_t second;
-  ze_event_handle_t zeSecond;
-  {
-    ASSERT_SUCCESS(urEnqueueEventsWaitWithBarrier(queue, 0, nullptr, &second));
-    zeSecond = second->getZeEvent();
-    ASSERT_SUCCESS(urEventRelease(second));
-  }
-  ASSERT_NE(first, second);
-  ASSERT_NE(zeFirst, zeSecond);
+  ASSERT_SUCCESS(urEnqueueEventsWaitWithBarrier(queue, 0, nullptr, &second));
+  // even if the event is reused, it should not be timestamped anymore
+  ASSERT_FALSE(second->isTimestamped());
+  ASSERT_SUCCESS(urEventRelease(second));
 
   ASSERT_EQ(zeEventHostSignal(zeEvent.get()), ZE_RESULT_SUCCESS);
-
   ASSERT_SUCCESS(urQueueFinish(queue));
-
-  // Now, the first event should be avilable for reuse
-  ur_event_handle_t third;
-  ze_event_handle_t zeThird;
-  {
-    ASSERT_SUCCESS(urEnqueueEventsWaitWithBarrier(queue, 0, nullptr, &third));
-    zeThird = third->getZeEvent();
-    ASSERT_SUCCESS(urEventRelease(third));
-
-    ASSERT_FALSE(third->isTimestamped());
-  }
-  ASSERT_EQ(first, third);
-  ASSERT_EQ(zeFirst, zeThird);
 }

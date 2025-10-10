@@ -16,25 +16,41 @@
 
 #include <random>
 
-#define UUR_RETURN_ON_FATAL_FAILURE(...)                                       \
-  __VA_ARGS__;                                                                 \
-  if (this->HasFatalFailure() || this->IsSkipped()) {                          \
-    return;                                                                    \
-  }                                                                            \
-  (void)0
-
-#define UUR_ASSERT_SUCCESS_OR_UNSUPPORTED(ret)                                 \
-  do {                                                                         \
-    auto status = ret;                                                         \
-    if (status == UR_RESULT_ERROR_UNSUPPORTED_FEATURE ||                       \
-        status == UR_RESULT_ERROR_UNSUPPORTED_ENUMERATION) {                   \
-      GTEST_SKIP();                                                            \
-    } else {                                                                   \
-      ASSERT_EQ(status, UR_RESULT_SUCCESS);                                    \
-    }                                                                          \
-  } while (0)
-
 namespace uur {
+
+namespace {
+// By default we skip certain platforms that we don't officially support and are unstable
+void checkBlacklisted(ur_platform_handle_t platform) {
+  static const std::array<uur::Matcher, 1> BLACKLISTED_PLATFORMS{
+      uur::OpenCL{"AMD Accelerated Parallel Processing"},
+  };
+
+  if (uur::alsoRunKnownFailures()) {
+    return;
+  }
+
+  ur_adapter_handle_t adapter = 0;
+  ASSERT_SUCCESS(urPlatformGetInfo(platform, UR_PLATFORM_INFO_ADAPTER,
+                                   sizeof(adapter), &adapter, nullptr));
+  detail::AdapterInfo info = detail::getAdapterInfo(adapter);
+
+  size_t name_size = 0;
+  ASSERT_SUCCESS(urPlatformGetInfo(platform, UR_PLATFORM_INFO_NAME, 0, nullptr,
+                                   &name_size));
+  std::string name(name_size - 1, '\0');
+  ASSERT_SUCCESS(urPlatformGetInfo(platform, UR_PLATFORM_INFO_NAME, name_size,
+                                   name.data(), nullptr));
+
+  for (auto &m : BLACKLISTED_PLATFORMS) {
+    if (m.matches(info, name)) {
+      GTEST_SKIP() << "Platform '" << name
+                   << "' is blacklisted and not tested by default."
+                      " Set `UR_CTS_ALSO_RUN_KNOWN_FAILURES` in the "
+                      "environment to disable the blacklist.";
+    }
+  }
+}
+} // namespace
 
 struct urAdapterTest : ::testing::Test,
                        ::testing::WithParamInterface<ur_adapter_handle_t> {
@@ -45,11 +61,14 @@ struct urAdapterTest : ::testing::Test,
 
 // In the vein of urAdapterTest and urDeviceTest this is a parameterized
 // platform fixture which can be instantiated via
-// UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P to run tests on each discovered
+// UUR_INSTANTIATE_PLATFORM_TEST_SUITE to run tests on each discovered
 // platform.
 struct urPlatformTest : ::testing::Test,
                         ::testing::WithParamInterface<ur_platform_handle_t> {
-  void SetUp() override { platform = GetParam(); }
+  void SetUp() override {
+    platform = GetParam();
+    UUR_RETURN_ON_FATAL_FAILURE(checkBlacklisted(platform));
+  }
 
   ur_platform_handle_t platform = nullptr;
 };
@@ -84,15 +103,12 @@ struct urAllDevicesTest : urPlatformTest {
     UUR_RETURN_ON_FATAL_FAILURE(urPlatformTest::SetUp());
     auto devicesPair = GetDevices(platform);
     if (!devicesPair.first) {
-      FAIL() << "Failed to get devices";
+      GTEST_SKIP() << "No devices available";
     }
     devices = std::move(devicesPair.second);
   }
 
   void TearDown() override {
-    for (auto &device : devices) {
-      EXPECT_SUCCESS(urDeviceRelease(device));
-    }
     UUR_RETURN_ON_FATAL_FAILURE(urPlatformTest::TearDown());
   }
 
@@ -105,6 +121,8 @@ struct urDeviceTest : ::testing::Test,
     device = GetParam().device;
     platform = GetParam().platform;
     adapter = GetParam().adapter;
+
+    UUR_RETURN_ON_FATAL_FAILURE(checkBlacklisted(platform));
   }
 
   ur_device_handle_t device = nullptr;
@@ -113,7 +131,7 @@ struct urDeviceTest : ::testing::Test,
 };
 } // namespace uur
 
-#define UUR_INSTANTIATE_ADAPTER_TEST_SUITE_P(FIXTURE)                          \
+#define UUR_INSTANTIATE_ADAPTER_TEST_SUITE(FIXTURE)                            \
   INSTANTIATE_TEST_SUITE_P(                                                    \
       , FIXTURE,                                                               \
       ::testing::ValuesIn(uur::AdapterEnvironment::instance->adapters),        \
@@ -121,7 +139,7 @@ struct urDeviceTest : ::testing::Test,
         return uur::GetAdapterBackendName(info.param);                         \
       })
 
-#define UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P(FIXTURE)                         \
+#define UUR_INSTANTIATE_PLATFORM_TEST_SUITE(FIXTURE)                           \
   INSTANTIATE_TEST_SUITE_P(                                                    \
       , FIXTURE,                                                               \
       ::testing::ValuesIn(uur::PlatformEnvironment::instance->platforms),      \
@@ -129,7 +147,7 @@ struct urDeviceTest : ::testing::Test,
         return uur::GetPlatformNameWithID(info.param);                         \
       })
 
-#define UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(FIXTURE)                           \
+#define UUR_INSTANTIATE_DEVICE_TEST_SUITE(FIXTURE)                             \
   INSTANTIATE_TEST_SUITE_P(                                                    \
       , FIXTURE,                                                               \
       ::testing::ValuesIn(uur::DevicesEnvironment::instance->devices),         \
@@ -143,7 +161,10 @@ template <class T>
 struct urPlatformTestWithParam
     : ::testing::Test,
       ::testing::WithParamInterface<std::tuple<ur_platform_handle_t, T>> {
-  void SetUp() override { platform = std::get<0>(this->GetParam()); }
+  void SetUp() override {
+    platform = std::get<0>(this->GetParam());
+    UUR_RETURN_ON_FATAL_FAILURE(checkBlacklisted(platform));
+  }
   const T &getParam() const { return std::get<1>(this->GetParam()); }
   ur_platform_handle_t platform;
 };
@@ -154,15 +175,12 @@ struct urAllDevicesTestWithParam : urPlatformTestWithParam<T> {
     UUR_RETURN_ON_FATAL_FAILURE(urPlatformTestWithParam<T>::SetUp());
     auto devicesPair = GetDevices(this->platform);
     if (!devicesPair.first) {
-      FAIL() << "Failed to get devices";
+      GTEST_SKIP() << "No devices available";
     }
     devices = std::move(devicesPair.second);
   }
 
   void TearDown() override {
-    for (auto &device : devices) {
-      EXPECT_SUCCESS(urDeviceRelease(device));
-    }
     UUR_RETURN_ON_FATAL_FAILURE(urPlatformTestWithParam<T>::TearDown());
   }
 
@@ -178,6 +196,8 @@ struct urDeviceTestWithParam
     device = device_tuple.device;
     platform = device_tuple.platform;
     adapter = device_tuple.adapter;
+
+    UUR_RETURN_ON_FATAL_FAILURE(checkBlacklisted(platform));
   }
   // TODO - I don't like the confusion with GetParam();
   const T &getParam() const { return std::get<1>(this->GetParam()); }
@@ -205,8 +225,14 @@ struct urContextTest : urDeviceTest {
 
 struct urSamplerTest : urContextTest {
   void SetUp() override {
-    UUR_KNOWN_FAILURE_ON(uur::OpenCL{"Intel(R) FPGA"});
     UUR_RETURN_ON_FATAL_FAILURE(urContextTest::SetUp());
+
+    bool image_support = false;
+    ASSERT_SUCCESS(uur::GetDeviceImageSupport(device, image_support));
+    if (!image_support) {
+      GTEST_SKIP() << "Device doesn't support images";
+    }
+
     sampler_desc = {
         UR_STRUCTURE_TYPE_SAMPLER_DESC,   /* stype */
         nullptr,                          /* pNext */
@@ -255,7 +281,7 @@ struct urMemImageTest : urContextTest {
   void SetUp() override {
     UUR_RETURN_ON_FATAL_FAILURE(urContextTest::SetUp());
     ur_bool_t imageSupported = false;
-    ASSERT_SUCCESS(urDeviceGetInfo(this->device, UR_DEVICE_INFO_IMAGE_SUPPORTED,
+    ASSERT_SUCCESS(urDeviceGetInfo(this->device, UR_DEVICE_INFO_IMAGE_SUPPORT,
                                    sizeof(ur_bool_t), &imageSupported,
                                    nullptr));
     if (!imageSupported) {
@@ -295,7 +321,7 @@ struct urMemImageTest : urContextTest {
 
 } // namespace uur
 
-#define UUR_PLATFORM_TEST_SUITE_P(FIXTURE, VALUES, PRINTER)                    \
+#define UUR_PLATFORM_TEST_SUITE_WITH_PARAM(FIXTURE, VALUES, PRINTER)           \
   INSTANTIATE_TEST_SUITE_P(                                                    \
       , FIXTURE,                                                               \
       testing::Combine(                                                        \
@@ -303,7 +329,7 @@ struct urMemImageTest : urContextTest {
           VALUES),                                                             \
       PRINTER)
 
-#define UUR_DEVICE_TEST_SUITE_P(FIXTURE, VALUES, PRINTER)                      \
+#define UUR_DEVICE_TEST_SUITE_WITH_PARAM(FIXTURE, VALUES, PRINTER)             \
   INSTANTIATE_TEST_SUITE_P(                                                    \
       , FIXTURE,                                                               \
       testing::Combine(                                                        \
@@ -330,8 +356,14 @@ template <class T> struct urContextTestWithParam : urDeviceTestWithParam<T> {
 
 template <class T> struct urSamplerTestWithParam : urContextTestWithParam<T> {
   void SetUp() override {
-    UUR_KNOWN_FAILURE_ON(uur::OpenCL{"Intel(R) FPGA"});
     UUR_RETURN_ON_FATAL_FAILURE(urContextTestWithParam<T>::SetUp());
+
+    bool image_support = false;
+    ASSERT_SUCCESS(uur::GetDeviceImageSupport(this->device, image_support));
+    if (!image_support) {
+      GTEST_SKIP() << "Device doesn't support images";
+    }
+
     sampler_desc = {
         UR_STRUCTURE_TYPE_SAMPLER_DESC,   /* stype */
         nullptr,                          /* pNext */
@@ -358,44 +390,6 @@ template <class T> struct urSamplerTestWithParam : urContextTestWithParam<T> {
   ur_sampler_desc_t sampler_desc;
 };
 
-template <class T> struct urMemImageTestWithParam : urContextTestWithParam<T> {
-  void SetUp() override {
-    UUR_RETURN_ON_FATAL_FAILURE(urContextTestWithParam<T>::SetUp());
-    ur_bool_t imageSupported = false;
-    ASSERT_SUCCESS(urDeviceGetInfo(this->device, UR_DEVICE_INFO_IMAGE_SUPPORTED,
-                                   sizeof(ur_bool_t), &imageSupported,
-                                   nullptr));
-    if (!imageSupported) {
-      GTEST_SKIP();
-    }
-    UUR_ASSERT_SUCCESS_OR_UNSUPPORTED(
-        urMemImageCreate(this->context, UR_MEM_FLAG_READ_WRITE, &format, &desc,
-                         nullptr, &image));
-    ASSERT_NE(nullptr, image);
-  }
-
-  void TearDown() override {
-    if (image) {
-      EXPECT_SUCCESS(urMemRelease(image));
-    }
-    UUR_RETURN_ON_FATAL_FAILURE(urContextTestWithParam<T>::TearDown());
-  }
-  ur_mem_handle_t image = nullptr;
-  ur_image_format_t format = {UR_IMAGE_CHANNEL_ORDER_RGBA,
-                              UR_IMAGE_CHANNEL_TYPE_FLOAT};
-  ur_image_desc_t desc = {UR_STRUCTURE_TYPE_IMAGE_DESC, // stype
-                          nullptr,                      // pNext
-                          UR_MEM_TYPE_IMAGE1D,          // mem object type
-                          1024,                         // image width
-                          1,                            // image height
-                          1,                            // image depth
-                          1,                            // array size
-                          0,                            // row pitch
-                          0,                            // slice pitch
-                          0,                            // mip levels
-                          0};                           // num samples
-};
-
 struct urQueueTest : urContextTest {
   void SetUp() override {
     UUR_RETURN_ON_FATAL_FAILURE(urContextTest::SetUp());
@@ -417,25 +411,22 @@ struct urQueueTest : urContextTest {
 
 struct urHostPipeTest : urQueueTest {
   void SetUp() override {
-    // We haven't got device code tests working on native cpu yet.
-    UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
-
     // The host pipe support query isn't implement on l0
     UUR_KNOWN_FAILURE_ON(uur::LevelZero{}, uur::LevelZeroV2{});
 
     UUR_RETURN_ON_FATAL_FAILURE(urQueueTest::SetUp());
 
     size_t size = 0;
-    ASSERT_SUCCESS(
-        urDeviceGetInfo(device, UR_DEVICE_INFO_HOST_PIPE_READ_WRITE_SUPPORTED,
-                        0, nullptr, &size));
+    ASSERT_SUCCESS(urDeviceGetInfo(device,
+                                   UR_DEVICE_INFO_HOST_PIPE_READ_WRITE_SUPPORT,
+                                   0, nullptr, &size));
     ASSERT_NE(size, 0);
     ASSERT_EQ(sizeof(ur_bool_t), size);
 
     void *info_data = alloca(size);
-    ASSERT_SUCCESS(
-        urDeviceGetInfo(device, UR_DEVICE_INFO_HOST_PIPE_READ_WRITE_SUPPORTED,
-                        size, info_data, nullptr));
+    ASSERT_SUCCESS(urDeviceGetInfo(device,
+                                   UR_DEVICE_INFO_HOST_PIPE_READ_WRITE_SUPPORT,
+                                   size, info_data, nullptr));
     ASSERT_NE(info_data, nullptr);
 
     bool supported;
@@ -446,8 +437,9 @@ struct urHostPipeTest : urQueueTest {
 
     UUR_RETURN_ON_FATAL_FAILURE(uur::KernelsEnvironment::instance->LoadSource(
         "foo", platform, il_binary));
-    ASSERT_SUCCESS(uur::KernelsEnvironment::instance->CreateProgram(
-        platform, context, device, *il_binary, nullptr, &program));
+    UUR_RETURN_ON_FATAL_FAILURE(
+        uur::KernelsEnvironment::instance->CreateProgram(
+            platform, context, device, *il_binary, nullptr, &program));
   }
 
   void TearDown() override {
@@ -684,7 +676,7 @@ struct urMemImageQueueTest : urQueueTest {
   void SetUp() override {
     UUR_RETURN_ON_FATAL_FAILURE(urQueueTest::SetUp());
     ur_bool_t imageSupported = false;
-    ASSERT_SUCCESS(urDeviceGetInfo(this->device, UR_DEVICE_INFO_IMAGE_SUPPORTED,
+    ASSERT_SUCCESS(urDeviceGetInfo(this->device, UR_DEVICE_INFO_IMAGE_SUPPORT,
                                    sizeof(ur_bool_t), &imageSupported,
                                    nullptr));
     if (!imageSupported) {
@@ -767,7 +759,7 @@ struct urMultiDeviceMemImageTest : urMultiDeviceContextTest {
     UUR_RETURN_ON_FATAL_FAILURE(urMultiDeviceContextTest::SetUp());
     for (auto device : devices) {
       ur_bool_t imageSupported = false;
-      ASSERT_SUCCESS(urDeviceGetInfo(device, UR_DEVICE_INFO_IMAGE_SUPPORTED,
+      ASSERT_SUCCESS(urDeviceGetInfo(device, UR_DEVICE_INFO_IMAGE_SUPPORT,
                                      sizeof(ur_bool_t), &imageSupported,
                                      nullptr));
       if (!imageSupported) {
@@ -974,8 +966,6 @@ template <class T> struct urUSMPoolTestWithParam : urContextTestWithParam<T> {
 
 struct urVirtualMemGranularityTest : urContextTest {
   void SetUp() override {
-    UUR_KNOWN_FAILURE_ON(uur::LevelZeroV2{});
-
     UUR_RETURN_ON_FATAL_FAILURE(urContextTest::SetUp());
 
     ur_bool_t virtual_memory_support = false;
@@ -986,9 +976,12 @@ struct urVirtualMemGranularityTest : urContextTest {
       GTEST_SKIP() << "Virtual memory is not supported.";
     }
 
+    const size_t allocationSize =
+        1; // assuming allocations in test are small enough and minimal granularity is used
     ASSERT_SUCCESS(urVirtualMemGranularityGetInfo(
-        context, device, UR_VIRTUAL_MEM_GRANULARITY_INFO_MINIMUM,
-        sizeof(granularity), &granularity, nullptr));
+        context, device, allocationSize,
+        UR_VIRTUAL_MEM_GRANULARITY_INFO_MINIMUM, sizeof(granularity),
+        &granularity, nullptr));
   }
   size_t granularity;
 };
@@ -996,8 +989,6 @@ struct urVirtualMemGranularityTest : urContextTest {
 template <class T>
 struct urVirtualMemGranularityTestWithParam : urContextTestWithParam<T> {
   void SetUp() override {
-    UUR_KNOWN_FAILURE_ON(uur::LevelZeroV2{});
-
     UUR_RETURN_ON_FATAL_FAILURE(urContextTestWithParam<T>::SetUp());
 
     ur_bool_t virtual_memory_support = false;
@@ -1007,10 +998,12 @@ struct urVirtualMemGranularityTestWithParam : urContextTestWithParam<T> {
     if (!virtual_memory_support) {
       GTEST_SKIP() << "Virtual memory is not supported.";
     }
-
+    const size_t allocationSize =
+        1; // assuming allocations in test are small and use smallest granularity
     ASSERT_SUCCESS(urVirtualMemGranularityGetInfo(
-        this->context, this->device, UR_VIRTUAL_MEM_GRANULARITY_INFO_MINIMUM,
-        sizeof(granularity), &granularity, nullptr));
+        this->context, this->device, allocationSize,
+        UR_VIRTUAL_MEM_GRANULARITY_INFO_MINIMUM, sizeof(granularity),
+        &granularity, nullptr));
     ASSERT_NE(granularity, 0);
   }
 
@@ -1228,7 +1221,8 @@ std::string deviceTestWithParamPrinter(
 
   std::stringstream ss;
   ss << param;
-  return uur::GetPlatformAndDeviceName(device) + "__" + ss.str();
+  return uur::GetPlatformAndDeviceName(device) + "__" +
+         GTestSanitizeString(ss.str());
 }
 
 template <>
@@ -1267,16 +1261,13 @@ std::string deviceTestWithParamPrinter<SamplerCreateParamT>(
 
 struct urProgramTest : urQueueTest {
   void SetUp() override {
-    // We haven't got device code tests working on native cpu yet.
-    UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
-
     UUR_RETURN_ON_FATAL_FAILURE(urQueueTest::SetUp());
 
-    ur_platform_backend_t backend;
+    ur_backend_t backend;
     ASSERT_SUCCESS(urPlatformGetInfo(platform, UR_PLATFORM_INFO_BACKEND,
                                      sizeof(backend), &backend, nullptr));
     // Images and samplers are not available on AMD
-    if (program_name == "image_copy" && backend == UR_PLATFORM_BACKEND_HIP) {
+    if (program_name == "image_copy" && backend == UR_BACKEND_HIP) {
       GTEST_SKIP();
     }
     UUR_RETURN_ON_FATAL_FAILURE(uur::KernelsEnvironment::instance->LoadSource(
@@ -1286,8 +1277,9 @@ struct urProgramTest : urQueueTest {
         UR_STRUCTURE_TYPE_PROGRAM_PROPERTIES, nullptr,
         static_cast<uint32_t>(metadatas.size()),
         metadatas.empty() ? nullptr : metadatas.data()};
-    ASSERT_SUCCESS(uur::KernelsEnvironment::instance->CreateProgram(
-        platform, context, device, *il_binary, &properties, &program));
+    UUR_RETURN_ON_FATAL_FAILURE(
+        uur::KernelsEnvironment::instance->CreateProgram(
+            platform, context, device, *il_binary, &properties, &program));
   }
 
   void TearDown() override {
@@ -1305,24 +1297,28 @@ struct urProgramTest : urQueueTest {
 
 template <class T> struct urProgramTestWithParam : urQueueTestWithParam<T> {
   void SetUp() override {
-    // We haven't got device code tests working on native cpu yet.
-    UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
-
     UUR_RETURN_ON_FATAL_FAILURE(urQueueTestWithParam<T>::SetUp());
 
-    ur_platform_backend_t backend;
+    ur_backend_t backend;
     ASSERT_SUCCESS(urPlatformGetInfo(this->platform, UR_PLATFORM_INFO_BACKEND,
                                      sizeof(backend), &backend, nullptr));
     // Images and samplers are not available on AMD
-    if (program_name == "image_copy" && backend == UR_PLATFORM_BACKEND_HIP) {
+    if (program_name == "image_copy" && backend == UR_BACKEND_HIP) {
       GTEST_SKIP();
     }
 
     UUR_RETURN_ON_FATAL_FAILURE(uur::KernelsEnvironment::instance->LoadSource(
         program_name, this->platform, il_binary));
-    ASSERT_SUCCESS(uur::KernelsEnvironment::instance->CreateProgram(
-        this->platform, this->context, this->device, *il_binary, nullptr,
-        &program));
+
+    const ur_program_properties_t properties = {
+        UR_STRUCTURE_TYPE_PROGRAM_PROPERTIES, nullptr,
+        static_cast<uint32_t>(metadatas.size()),
+        metadatas.empty() ? nullptr : metadatas.data()};
+
+    UUR_RETURN_ON_FATAL_FAILURE(
+        uur::KernelsEnvironment::instance->CreateProgram(
+            this->platform, this->context, this->device, *il_binary,
+            &properties, &program));
   }
 
   void TearDown() override {
@@ -1335,6 +1331,7 @@ template <class T> struct urProgramTestWithParam : urQueueTestWithParam<T> {
   std::shared_ptr<std::vector<char>> il_binary;
   std::string program_name = "foo";
   ur_program_handle_t program = nullptr;
+  std::vector<ur_program_metadata_t> metadatas{};
 };
 
 // This fixture can provide a kernel, but it doesn't build the kernel at SetUp,
@@ -1346,9 +1343,6 @@ template <class T> struct urProgramTestWithParam : urQueueTestWithParam<T> {
 // instead.
 struct urBaseKernelTest : urProgramTest {
   void SetUp() override {
-    // We haven't got device code tests working on native cpu yet.
-    UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
-
     UUR_RETURN_ON_FATAL_FAILURE(urProgramTest::SetUp());
     auto kernel_names =
         uur::KernelsEnvironment::instance->GetEntryPointNames(program_name);
@@ -1475,10 +1469,12 @@ struct KernelLaunchHelper {
     // the AMD backend handles this differently and uses three separate
     // arguments for each of the three dimensions of the accessor.
 
-    ur_platform_backend_t backend;
+    ur_backend_t backend;
     ASSERT_SUCCESS(urPlatformGetInfo(platform, UR_PLATFORM_INFO_BACKEND,
                                      sizeof(backend), &backend, nullptr));
-    if (backend == UR_PLATFORM_BACKEND_HIP) {
+    std::string target_name;
+    ASSERT_SUCCESS(GetPlatformTriple(platform, target_name));
+    if (target_name == "amdgcn-amd-amdhsa") {
       // this emulates the three offset params for buffer accessor on AMD.
       size_t val = 0;
       ASSERT_SUCCESS(urKernelSetArgValue(kernel, current_arg_index + 1,
@@ -1509,7 +1505,7 @@ struct KernelLaunchHelper {
     size_t offset = 0;
     ASSERT_SUCCESS(urEnqueueKernelLaunch(queue, kernel, 1, &offset,
                                          &global_size, &local_size, 0, nullptr,
-                                         nullptr));
+                                         0, nullptr, nullptr));
     ASSERT_SUCCESS(urQueueFinish(queue));
   }
 
@@ -1629,14 +1625,14 @@ private:
 
 template <class T>
 struct urKernelExecutionTestWithParam : urBaseKernelExecutionTestWithParam<T> {
-  void SetUp() {
+  void SetUp() override {
     UUR_RETURN_ON_FATAL_FAILURE(urBaseKernelExecutionTestWithParam<T>::SetUp());
     this->Build();
   }
 };
 
 struct urKernelExecutionTest : urBaseKernelExecutionTest {
-  void SetUp() {
+  void SetUp() override {
     UUR_RETURN_ON_FATAL_FAILURE(urBaseKernelExecutionTest::SetUp());
     Build();
   }
@@ -1648,26 +1644,28 @@ template <class T> struct GlobalVar {
 };
 
 using namespace std::string_literals;
-struct urGlobalVariableTest : uur::urKernelExecutionTest {
+template <typename Derived> struct urGlobalVariableBaseTest : public Derived {
   void SetUp() override {
-
-    program_name = "device_global";
+    this->program_name = "device_global";
     global_var = {"_Z7dev_var", 0};
 
-    /* Some adapters cannot use the mangled variable name directly.
-     * Instead, in order to map the mangled variable to the internal name,
-     * they rely on metadata set when creating the program */
+    // Some adapters cannot use the mangled variable name directly.
+    // Instead, in order to map the mangled variable to the internal name,
+    // they rely on metadata set when creating the program.
     const std::string metadata_name = "_Z7dev_var@global_id_mapping";
     ur_program_metadata_value_t metadata_value;
-    metadata_value.pData = (void *)metadataData.c_str();
-    metadatas.push_back({metadata_name.c_str(),
-                         UR_PROGRAM_METADATA_TYPE_BYTE_ARRAY,
-                         metadataData.size(), metadata_value});
-    UUR_RETURN_ON_FATAL_FAILURE(uur::urKernelExecutionTest::SetUp());
+    metadata_value.pData = (void *)metadataData.data();
+    this->metadatas.push_back({metadata_name.c_str(),
+                               UR_PROGRAM_METADATA_TYPE_BYTE_ARRAY,
+                               metadataData.size(), metadata_value});
+
+    UUR_RETURN_ON_FATAL_FAILURE(Derived::SetUp());
+
     bool global_var_support = false;
     ASSERT_SUCCESS(urDeviceGetInfo(
-        device, UR_DEVICE_INFO_GLOBAL_VARIABLE_SUPPORT,
+        this->device, UR_DEVICE_INFO_GLOBAL_VARIABLE_SUPPORT,
         sizeof(global_var_support), &global_var_support, nullptr));
+
     if (!global_var_support) {
       GTEST_SKIP() << "Global variable access is not supported";
     }
@@ -1677,6 +1675,13 @@ struct urGlobalVariableTest : uur::urKernelExecutionTest {
   std::string metadataData = "\0\0\0\0\0\0\0\0dev_var"s;
   GlobalVar<int> global_var;
 };
+
+struct urGlobalVariableTest
+    : urGlobalVariableBaseTest<uur::urKernelExecutionTest> {};
+
+template <class T>
+struct urGlobalVariableWithParamTest
+    : urGlobalVariableBaseTest<uur::urKernelExecutionTestWithParam<T>> {};
 
 struct urMultiDeviceQueueTest : urMultiDeviceContextTest {
   void SetUp() override {
@@ -1703,12 +1708,11 @@ struct urMultiDeviceProgramTest : urMultiDeviceQueueTest {
   void SetUp() override {
     UUR_RETURN_ON_FATAL_FAILURE(urMultiDeviceQueueTest::SetUp());
 
-    ur_platform_backend_t backend;
+    ur_backend_t backend;
     ASSERT_SUCCESS(urPlatformGetInfo(platform, UR_PLATFORM_INFO_BACKEND,
                                      sizeof(backend), &backend, nullptr));
     // Multi-device programs are not supported for AMD and CUDA
-    if (backend == UR_PLATFORM_BACKEND_HIP ||
-        backend == UR_PLATFORM_BACKEND_CUDA) {
+    if (backend == UR_BACKEND_HIP || backend == UR_BACKEND_CUDA) {
       GTEST_SKIP();
     }
     if (devices.size() < 2) {

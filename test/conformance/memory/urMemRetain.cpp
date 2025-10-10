@@ -7,7 +7,7 @@
 #include <uur/known_failure.h>
 
 using urMemRetainTest = uur::urMemBufferTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urMemRetainTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urMemRetainTest);
 
 TEST_P(urMemRetainTest, Success) {
   UUR_KNOWN_FAILURE_ON(uur::NativeCPU{});
@@ -29,7 +29,7 @@ TEST_P(urMemRetainTest, CheckReferenceCount) {
                               nullptr));
   ASSERT_EQ(referenceCount, 1);
 
-  { ASSERT_SUCCESS(urMemRetain(buffer)); }
+  ASSERT_SUCCESS(urMemRetain(buffer));
 
   ASSERT_SUCCESS(urMemGetInfo(buffer, UR_MEM_INFO_REFERENCE_COUNT,
                               sizeof(referenceCount), &referenceCount,

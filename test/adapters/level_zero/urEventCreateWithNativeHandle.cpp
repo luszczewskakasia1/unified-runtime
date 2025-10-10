@@ -4,6 +4,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+// RUN: %maybe-v1 ./event_create-test
+// RUN: %maybe-v2 ./event_create-test
+
 #include "ur_api.h"
 #include "uur/checks.h"
 #include "ze_api.h"
@@ -15,7 +18,7 @@
 
 using namespace std::chrono_literals;
 using urLevelZeroEventNativeHandleTest = uur::urQueueTest;
-UUR_INSTANTIATE_DEVICE_TEST_SUITE_P(urLevelZeroEventNativeHandleTest);
+UUR_INSTANTIATE_DEVICE_TEST_SUITE(urLevelZeroEventNativeHandleTest);
 
 #define TEST_MEMCPY_SIZE 4096
 

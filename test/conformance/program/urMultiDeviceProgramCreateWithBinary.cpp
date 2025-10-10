@@ -53,7 +53,7 @@ struct urMultiDeviceProgramCreateWithBinaryTest
   std::vector<size_t> binary_sizes;
   ur_program_handle_t binary_program = nullptr;
 };
-UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P(urMultiDeviceProgramCreateWithBinaryTest);
+UUR_INSTANTIATE_PLATFORM_TEST_SUITE(urMultiDeviceProgramCreateWithBinaryTest);
 
 // Create the kernel using the program created with multiple binaries and run it
 // on all devices.
@@ -73,9 +73,9 @@ TEST_P(urMultiDeviceProgramCreateWithBinaryTest,
     ASSERT_SUCCESS(
         urKernelCreate(binary_program, kernelName.data(), kernel.ptr()));
 
-    ASSERT_SUCCESS(urEnqueueKernelLaunch(queues[i], kernel.get(), n_dimensions,
-                                         &global_offset, &local_size,
-                                         &global_size, 0, nullptr, nullptr));
+    ASSERT_SUCCESS(urEnqueueKernelLaunch(
+        queues[i], kernel.get(), n_dimensions, &global_offset, &local_size,
+        &global_size, 0, nullptr, 0, nullptr, nullptr));
 
     ASSERT_SUCCESS(urQueueFinish(queues[i]));
   }
@@ -86,17 +86,17 @@ TEST_P(urMultiDeviceProgramCreateWithBinaryTest, CheckCompileAndLink) {
   // Level Zero and link only programs in Object state. OpenCL allows to compile
   // and link programs created from native binaries, so probably we should align
   // those two.
-  ur_platform_backend_t backend;
+  ur_backend_t backend;
   ASSERT_SUCCESS(urPlatformGetInfo(platform, UR_PLATFORM_INFO_BACKEND,
                                    sizeof(backend), &backend, nullptr));
-  if (backend == UR_PLATFORM_BACKEND_LEVEL_ZERO) {
+  if (backend == UR_BACKEND_LEVEL_ZERO) {
     ASSERT_EQ(urProgramCompile(context, binary_program, nullptr),
               UR_RESULT_ERROR_INVALID_OPERATION);
     uur::raii::Program linked_program;
     ASSERT_EQ(urProgramLink(context, 1, &binary_program, nullptr,
                             linked_program.ptr()),
               UR_RESULT_ERROR_INVALID_OPERATION);
-  } else if (backend == UR_PLATFORM_BACKEND_OPENCL) {
+  } else if (backend == UR_BACKEND_OPENCL) {
     ASSERT_SUCCESS(urProgramCompile(context, binary_program, nullptr));
     uur::raii::Program linked_program;
     ASSERT_SUCCESS(urProgramLink(context, 1, &binary_program, nullptr,
@@ -124,10 +124,10 @@ TEST_P(urMultiDeviceProgramCreateWithBinaryTest,
 // context.
 TEST_P(urMultiDeviceProgramCreateWithBinaryTest, MultipleBuildCalls) {
   // Run test only for level zero backend which supports urProgramBuildExp.
-  ur_platform_backend_t backend;
+  ur_backend_t backend;
   ASSERT_SUCCESS(urPlatformGetInfo(platform, UR_PLATFORM_INFO_BACKEND,
                                    sizeof(backend), &backend, nullptr));
-  if (backend != UR_PLATFORM_BACKEND_LEVEL_ZERO) {
+  if (backend != UR_BACKEND_LEVEL_ZERO) {
     GTEST_SKIP();
   }
   auto first_subset = std::vector<ur_device_handle_t>(
@@ -301,7 +301,7 @@ struct urMultiDeviceCommandBufferExpTest
   static constexpr size_t global_size = 64;
   static constexpr size_t local_size = 4;
 };
-UUR_INSTANTIATE_PLATFORM_TEST_SUITE_P(urMultiDeviceCommandBufferExpTest);
+UUR_INSTANTIATE_PLATFORM_TEST_SUITE(urMultiDeviceCommandBufferExpTest);
 
 TEST_P(urMultiDeviceCommandBufferExpTest, Enqueue) {
   for (size_t i = 0; i < devices.size(); i++) {
@@ -311,9 +311,12 @@ TEST_P(urMultiDeviceCommandBufferExpTest, Enqueue) {
     }
 
     // Create command-buffer
+    ur_exp_command_buffer_desc_t desc{
+        UR_STRUCTURE_TYPE_EXP_COMMAND_BUFFER_DESC, nullptr, false, false, false,
+    };
     uur::raii::CommandBuffer cmd_buf_handle;
-    ASSERT_SUCCESS(urCommandBufferCreateExp(context, device, nullptr,
-                                            cmd_buf_handle.ptr()));
+    ASSERT_SUCCESS(
+        urCommandBufferCreateExp(context, device, &desc, cmd_buf_handle.ptr()));
 
     // Append kernel command to command-buffer and close command-buffer
     ASSERT_SUCCESS(urCommandBufferAppendKernelLaunchExp(
@@ -323,7 +326,7 @@ TEST_P(urMultiDeviceCommandBufferExpTest, Enqueue) {
     ASSERT_SUCCESS(urCommandBufferFinalizeExp(cmd_buf_handle));
 
     // Verify execution succeeds
-    ASSERT_SUCCESS(urCommandBufferEnqueueExp(cmd_buf_handle, queues[i], 0,
+    ASSERT_SUCCESS(urEnqueueCommandBufferExp(queues[i], cmd_buf_handle, 0,
                                              nullptr, nullptr));
     ASSERT_SUCCESS(urQueueFinish(queues[i]));
   }
@@ -355,7 +358,7 @@ TEST_P(urMultiDeviceCommandBufferExpTest, Update) {
     ASSERT_SUCCESS(urCommandBufferFinalizeExp(cmd_buf_handle));
 
     // Verify execution succeeds
-    ASSERT_SUCCESS(urCommandBufferEnqueueExp(cmd_buf_handle, queues[i], 0,
+    ASSERT_SUCCESS(urEnqueueCommandBufferExp(queues[i], cmd_buf_handle, 0,
                                              nullptr, nullptr));
     ASSERT_SUCCESS(urQueueFinish(queues[i]));
 
@@ -363,6 +366,7 @@ TEST_P(urMultiDeviceCommandBufferExpTest, Update) {
     ur_exp_command_buffer_update_kernel_launch_desc_t update_desc = {
         UR_STRUCTURE_TYPE_EXP_COMMAND_BUFFER_UPDATE_KERNEL_LAUNCH_DESC, // stype
         nullptr,                                                        // pNext
+        command,      // hCommand
         kernel,       // hNewKernel
         0,            // numNewMemObjArgs
         0,            // numNewPointerArgs
@@ -375,8 +379,9 @@ TEST_P(urMultiDeviceCommandBufferExpTest, Update) {
         nullptr,      // pNewGlobalWorkSize
         nullptr,      // pNewLocalWorkSize
     };
-    ASSERT_SUCCESS(urCommandBufferUpdateKernelLaunchExp(command, &update_desc));
-    ASSERT_SUCCESS(urCommandBufferEnqueueExp(cmd_buf_handle, queues[i], 0,
+    ASSERT_SUCCESS(
+        urCommandBufferUpdateKernelLaunchExp(cmd_buf_handle, 1, &update_desc));
+    ASSERT_SUCCESS(urEnqueueCommandBufferExp(queues[i], cmd_buf_handle, 0,
                                              nullptr, nullptr));
     ASSERT_SUCCESS(urQueueFinish(queues[i]));
   }

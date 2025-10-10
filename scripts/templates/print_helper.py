@@ -11,6 +11,7 @@ The script utilizes provided specifications to generate function objects and the
 such as function names, arguments, and types.
 The get_api_types() function generates all Printing API function objects, excluding "extras" functions.
 """
+
 import re
 
 from templates import helper as th
@@ -99,6 +100,7 @@ class Func:
         self._obj_type = obj["type"]
         self._name = obj["name"]
         self._type_name = self._make_type_name(namespace, tags, obj)
+        self.guard = obj["guard"] if "guard" in obj else None
 
     @property
     def c_name(self) -> str:

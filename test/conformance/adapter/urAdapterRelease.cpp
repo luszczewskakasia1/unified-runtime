@@ -7,7 +7,7 @@
 #include <uur/fixtures.h>
 
 using urAdapterReleaseTest = uur::urAdapterTest;
-UUR_INSTANTIATE_ADAPTER_TEST_SUITE_P(urAdapterReleaseTest);
+UUR_INSTANTIATE_ADAPTER_TEST_SUITE(urAdapterReleaseTest);
 
 TEST_P(urAdapterReleaseTest, Success) {
   uint32_t referenceCountBefore = 0;
@@ -18,7 +18,7 @@ TEST_P(urAdapterReleaseTest, Success) {
                                   &referenceCountBefore, nullptr));
 
   uint32_t referenceCountAfter = 0;
-  EXPECT_SUCCESS(urAdapterRelease(adapter));
+  ASSERT_SUCCESS(urAdapterRelease(adapter));
   ASSERT_SUCCESS(urAdapterGetInfo(adapter, UR_ADAPTER_INFO_REFERENCE_COUNT,
                                   sizeof(referenceCountAfter),
                                   &referenceCountAfter, nullptr));

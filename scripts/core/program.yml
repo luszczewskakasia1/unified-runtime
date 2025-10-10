@@ -105,7 +105,7 @@ params:
       desc: "[in][optional] pointer to program creation properties."
     - type: $x_program_handle_t*
       name: phProgram
-      desc: "[out] pointer to handle of program object created."
+      desc: "[out][alloc] pointer to handle of program object created."
 returns:
     - $X_RESULT_ERROR_INVALID_NULL_POINTER:
         - "`NULL != pProperties && pProperties->count > 0 && NULL == pProperties->pMetadatas`"
@@ -152,7 +152,7 @@ params:
       desc: "[in][optional] pointer to program creation properties."
     - type: $x_program_handle_t*
       name: phProgram
-      desc: "[out] pointer to handle of Program object created."
+      desc: "[out][alloc] pointer to handle of Program object created."
 returns:
     - $X_RESULT_ERROR_INVALID_NULL_POINTER:
         - "`NULL != pProperties && pProperties->count > 0 && NULL == pProperties->pMetadatas`"
@@ -227,7 +227,7 @@ analogue:
 details:
     - "The application may call this function from simultaneous threads."
     - "Following a successful call to this entry point the program returned in `phProgram` will contain a binary of the $X_PROGRAM_BINARY_TYPE_EXECUTABLE type for each device in `hContext`."
-    - "If a non-success code is returned and `phProgram` is not `nullptr`, it will contain an unspecified program or `nullptr`. Implementations may use the build log of this program (accessible via $xProgramGetBuildInfo) to provide an error log for the linking failure."
+    - "If a non-success code is returned, adapters may store a program in `phProgram`. This program should only be used with `$xProgramGetBuildInfo` to get the build log for the failure. Adapters which do not do not support producing build logs must set this value to `nullptr`."
 params:
     - type: $x_context_handle_t
       name: hContext
@@ -243,7 +243,7 @@ params:
       desc: "[in][optional] pointer to linker options null-terminated string."
     - type: $x_program_handle_t*
       name: phProgram
-      desc: "[out] pointer to handle of program object created."
+      desc: "[out][alloc] pointer to handle of program object created."
 returns:
     - $X_RESULT_ERROR_INVALID_PROGRAM:
       - "If one of the programs in `phPrograms` isn't a valid program object."
@@ -323,6 +323,8 @@ returns:
         - "If `pFunctionName` couldn't be found in `hProgram`."
     - $X_RESULT_ERROR_FUNCTION_ADDRESS_NOT_AVAILABLE:
         - "If `pFunctionName` could be located, but its address couldn't be retrieved."
+    - $X_RESULT_ERROR_UNSUPPORTED_FEATURE:
+        - "If the backend does not support querying function pointers."
 --- #--------------------------------------------------------------------------
 type: function
 desc: "Retrieves a pointer to a device global variable."
@@ -381,11 +383,11 @@ etors:
           [$x_device_handle_t[]] Return list of devices associated with a program.
           This is either the list of devices associated with the context or a subset of those devices when the program is created using $xProgramCreateWithBinary.
     - name: IL
-      desc: "[char[]] Return program IL if the program was created with $xProgramCreateWithIL, otherwise return size will be set to 0 and nothing will be returned."
+      desc: "[char[]] Return program IL if the program was created with $xProgramCreateWithIL, otherwise return size will be set to 0 and nothing will be returned. This is not null-terminated."
     - name: BINARY_SIZES
       desc: "[size_t[]] Return program binary sizes for each device."
     - name: BINARIES
-      desc: "[unsigned char[]] Return program binaries for all devices for this Program."
+      desc: "[unsigned char *[]] Write program binaries into caller-provided buffers for each device. These are not null-terminated."
     - name: NUM_KERNELS
       desc: "[size_t][optional-query] Number of kernels in Program, return type size_t."
     - name: KERNEL_NAMES
@@ -614,7 +616,7 @@ params:
       desc: "[in][optional] pointer to native program properties struct."
     - type: "$x_program_handle_t*"
       name: phProgram
-      desc: "[out] pointer to the handle of the program object created."
+      desc: "[out][alloc] pointer to the handle of the program object created."
 returns:
     - $X_RESULT_ERROR_UNSUPPORTED_FEATURE:
         - "If the adapter has no underlying equivalent handle."
