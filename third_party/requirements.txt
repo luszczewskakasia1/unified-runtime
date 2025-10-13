@@ -8,7 +8,7 @@ certifi==2024.07.04
 chardet==3.0.4
 clang-format==19.1.6
 colorama==0.4.1
-docutils==0.15.2
+docutils==0.22.2
 exhale==0.3.0
 idna==3.7
 imagesize==1.1.0
