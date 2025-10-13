@@ -10,7 +10,7 @@ clang-format==19.1.6
 colorama==0.4.1
 docutils==0.15.2
 exhale==0.3.0
-idna==3.7
+idna==3.11
 imagesize==1.1.0
 Jinja2==3.1.6
 lxml==4.9.3
