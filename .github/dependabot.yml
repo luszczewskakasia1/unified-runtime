@@ -16,7 +16,8 @@ updates:
       interval: "weekly"
     groups:
       actions-dependencies:
-        applies-to: version-updates
+        dependency-type: "development"
+        # applies-to: version-updates
         # patterns:
         #   - "*"
 
