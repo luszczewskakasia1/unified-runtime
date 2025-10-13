@@ -14,5 +14,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      actions-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
     open-pull-requests-limit: 20
     
